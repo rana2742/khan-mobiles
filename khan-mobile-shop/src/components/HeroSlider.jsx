@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SLIDES_DATA } from '../data/homeData';
@@ -16,6 +17,7 @@ const HeroSlider = () => {
   const [[current, direction], setSlide] = useState([0, 1]);
   const timerRef = useRef(null);
   const total = SLIDES_DATA.length;
+  const navigateTo = useNavigate();
 
   const startTimer = useCallback(() => {
     clearInterval(timerRef.current);
@@ -99,9 +101,12 @@ const HeroSlider = () => {
                   transition={{ delay: 0.45 }}
                   className="flex flex-col sm:flex-row gap-4">
                   <motion.div whileHover={{ boxShadow: `0 0 28px ${slide.accentColor}60` }} className="rounded-xl3 inline-block">
-                    <Button size="lg">{slide.cta}</Button>
+                     <Button size="lg" onClick={() => navigateTo(slide.category ? `/shop?category=${encodeURIComponent(slide.category)}` : '/shop')}>{slide.cta}
+                  </Button>
                   </motion.div>
-                  <Button variant="secondary" size="lg">Browse All</Button>
+                   <Button variant="secondary" size="lg" onClick={() => navigateTo('/shop')}>
+                      Browse All
+                    </Button>
                 </motion.div>
               </div>
             </Container>

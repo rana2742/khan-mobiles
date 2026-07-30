@@ -1,4 +1,4 @@
- export const SLIDES_DATA = [
+export const SLIDES_DATA = [
   {
     id: 'slide-1',
     headline: 'Next-Gen Accessories',
@@ -6,6 +6,7 @@
     cta: 'Shop Now',
     bgImage: '/images/mobile.jpg',
     accentColor: '#3B82F6',
+    category: null,
   },
   {
     id: 'slide-2',
@@ -14,6 +15,7 @@
     cta: 'Shop Chargers',
     bgImage: '/images/charger.jpg',
     accentColor: '#a855f7',
+    category: 'Chargers',
   },
   {
     id: 'slide-3',
@@ -22,16 +24,45 @@
     cta: 'Shop Audio',
     bgImage: '/images/Headphone.jpg',
     accentColor: '#22c55e',
+    category: 'Earphones',
   },
   {
-  id: 'slide-4',
-  headline: 'Stay Connected',
-  subtext: 'Discover stylish smartwatches with fitness tracking, heart-rate monitoring, and long-lasting battery life.',
-  cta: 'Explore Watches',
-  bgImage: '/images/watch.jpg',
-  accentColor: '#0EA5E9',
-},
-];
+    id: 'slide-4',
+    headline: 'Stay Connected',
+    subtext: 'Discover stylish smartwatches with fitness tracking, heart-rate monitoring, and long-lasting battery life.',
+    cta: 'Explore Watches',
+    bgImage: '/images/watch.jpg',
+    accentColor: '#0EA5E9',
+    category: 'Smartwatches',
+  },
+  {
+    id: 'slide-5',
+    headline: 'True Wireless Freedom',
+    subtext: 'Compact earbuds with rich sound and all-day battery life.',
+    cta: 'Shop Earbuds',
+    bgImage: '/images/earbuds.jpg',
+    accentColor: '#eab308',
+    category: 'Earbuds',
+  },
+  {
+    id: 'slide-6',
+    headline: 'Never Run Out of Power',
+    subtext: 'High-capacity power banks for charging on the go.',
+    cta: 'Shop Power Banks',
+    bgImage: '/images/powerbank.jpg',
+    accentColor: '#ef4444',
+    category: 'Power Banks',
+  },
+  {
+    id: 'slide-7',
+    headline: 'Protect What Matters',
+    subtext: 'Tempered glass and film protectors for every screen.',
+    cta: 'Shop Protectors',
+    bgImage: '/images/screenprotector.jpg',
+    accentColor: '#14b8a6',
+    category: 'Screen Protectors',
+  },
+]; 
 // ─── CATEGORIES_DATA ──────────────────────────────────────────────────────────
 export const CATEGORIES_DATA = [
   { id: 'earbuds', label: 'Earbuds', icon: '👂' },
