@@ -9,7 +9,7 @@ const QUICK_LINKS = [
   { label: 'Contact',    to: '/contact' },
 ];
 
-const CATEGORY_LINKS = ['Cases','Chargers','Earphones','Power Banks','Screen Protectors','Smartwatches'];
+const CATEGORY_LINKS = ['Earbuds','Chargers','Earphones','Power Banks','Screen Protectors','Smartwatches'];
 
 const SOCIALS = [
   { label: 'Facebook', href: 'https://www.facebook.com/share/1BaF76oZUk/', icon: (

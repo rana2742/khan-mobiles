@@ -34,7 +34,7 @@
 ];
 // ─── CATEGORIES_DATA ──────────────────────────────────────────────────────────
 export const CATEGORIES_DATA = [
-  { id: 'cases',             label: 'Cases',             icon: '📱' },
+  { id: 'earbuds', label: 'Earbuds', icon: '👂' },
   { id: 'chargers',          label: 'Chargers',          icon: '⚡' },
   { id: 'earphones',         label: 'Earphones',         icon: '🎧' },
   { id: 'power-banks',       label: 'Power Banks',       icon: '🔋' },
