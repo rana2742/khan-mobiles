@@ -10,7 +10,7 @@ import Button from '../components/Button';
 const CONTACT_INFO = [
   { icon: '📍', label: 'Visit Us', value: 'Industrial Estate area near UBL Bank Multan' },
   { icon: '📞', label: 'Call Us', value: '+92 316 695 3535' },
-  { icon: '✉️', label: 'Email Us', value: 'info@khanmobile.pk' },
+  { icon: '✉️', label: 'Email Us', value: 'khanmobiles345@gmail.com' },
   { icon: '🕐', label: 'Store Hours', value: 'Open Daily: 08am – 10pm' },
 ];
 
