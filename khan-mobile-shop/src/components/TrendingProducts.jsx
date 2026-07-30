@@ -50,25 +50,13 @@ const TrendingProducts = () => {
               ))}
             </div>
           ) : (
-            <>
-              {/* Mobile: horizontal scroll */}
-              <div className="md:hidden flex gap-4 overflow-x-auto pb-4 -mx-4 px-4 snap-x snap-mandatory scrollbar-none">
-                {products.map((product) => (
-                  <motion.div key={product.id} variants={itemVariants} className="shrink-0 w-56 snap-start">
-                    <ProductCard {...product} />
-                  </motion.div>
-                ))}
-              </div>
-
-              {/* Desktop: grid */}
-              <div className="hidden md:grid grid-cols-2 lg:grid-cols-4 gap-6">
-                {products.map((product) => (
-                  <motion.div key={product.id} variants={itemVariants}>
-                    <ProductCard {...product} />
-                  </motion.div>
-                ))}
-              </div>
-            </>
+ <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+  {products.map((product) => (
+    <motion.div key={product.id} variants={itemVariants}>
+      <ProductCard {...product} />
+    </motion.div>
+  ))}
+</div>
           )}
         </motion.div>
       </Container>
