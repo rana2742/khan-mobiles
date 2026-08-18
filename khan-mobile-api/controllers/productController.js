@@ -1,6 +1,5 @@
-const fs = require('fs');
-const path = require('path');
-const { pool } = require('../config/db');
+const Product = require('../models/Product');
+const { deleteFromCloudinary } = require('../middleware/upload');
 
 const slugify = (str) =>
   str.toLowerCase().trim()
@@ -13,13 +12,9 @@ const generateUniqueSlug = async (name, excludeId = null) => {
   let n = 1;
   // eslint-disable-next-line no-constant-condition
   while (true) {
-    const [rows] = await pool.query(
-      excludeId
-        ? 'SELECT id FROM products WHERE slug = ? AND id != ? LIMIT 1'
-        : 'SELECT id FROM products WHERE slug = ? LIMIT 1',
-      excludeId ? [slug, excludeId] : [slug]
-    );
-    if (!rows.length) return slug;
+    const query = excludeId ? { slug, _id: { $ne: excludeId } } : { slug };
+    const exists = await Product.exists(query);
+    if (!exists) return slug;
     n += 1;
     slug = `${base}-${n}`;
   }
@@ -36,52 +31,32 @@ const parseCompatibleModels = (value) => {
   }
 };
 
-const toAbsoluteUrl = (req, relativePath) => (relativePath ? `${req.protocol}://${req.get('host')}${relativePath}` : null);
-
-const toProductDTO = (row, req, images = []) => ({
-  id: row.id,
-  name: row.name,
-  slug: row.slug,
-  description: row.description,
-  price: Number(row.price),
-  compareAtPrice: row.compare_at_price !== null ? Number(row.compare_at_price) : null,
-  category: row.category,
-  brand: row.brand,
-  rating: Number(row.rating),
-  reviewCount: row.review_count,
-  badge: row.badge,
-  imageUrl: toAbsoluteUrl(req, row.image_url),
-  images: images.map((img) => ({ id: img.id, url: toAbsoluteUrl(req, img.image_url) })),
-  bgGradient: row.bg_gradient,
-  compatibleModels: typeof row.compatible_models === 'string' ? JSON.parse(row.compatible_models) : (row.compatible_models || []),
-  stock: row.stock,
-  isActive: !!row.is_active,
-  createdAt: row.created_at,
-  updatedAt: row.updated_at,
+const toProductDTO = (doc) => ({
+  id: doc._id.toString(),
+  name: doc.name,
+  slug: doc.slug,
+  description: doc.description,
+  price: Number(doc.price),
+  compareAtPrice: doc.compareAtPrice !== null && doc.compareAtPrice !== undefined ? Number(doc.compareAtPrice) : null,
+  category: doc.category,
+  brand: doc.brand,
+  rating: Number(doc.rating),
+  reviewCount: doc.reviewCount,
+  badge: doc.badge,
+  imageUrl: doc.imageUrl,
+  images: (doc.images || [])
+    .slice()
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .map((img) => ({ id: img._id.toString(), url: img.url })),
+  bgGradient: doc.bgGradient,
+  compatibleModels: doc.compatibleModels || [],
+  stock: doc.stock,
+  isActive: !!doc.isActive,
+  createdAt: doc.createdAt,
+  updatedAt: doc.updatedAt,
 });
 
-// Fetches gallery images for many products at once (avoids N+1 queries on list views).
-const getImagesForProducts = async (productIds) => {
-  if (!productIds.length) return {};
-  const [rows] = await pool.query(
-    `SELECT * FROM product_images WHERE product_id IN (${productIds.map(() => '?').join(',')}) ORDER BY product_id, sort_order, id`,
-    productIds
-  );
-  return rows.reduce((acc, img) => {
-    (acc[img.product_id] ||= []).push(img);
-    return acc;
-  }, {});
-};
-
-// After adding/removing gallery images, keep products.image_url (the DTO's
-// primary photo, used by cards/listings) in sync with the first gallery image.
-const syncPrimaryImage = async (productId) => {
-  const [[first]] = await pool.query(
-    'SELECT image_url FROM product_images WHERE product_id = ? ORDER BY sort_order, id LIMIT 1',
-    [productId]
-  );
-  await pool.query('UPDATE products SET image_url = ? WHERE id = ?', [first?.image_url || null, productId]);
-};
+const OBJECT_ID_RE = /^[0-9a-fA-F]{24}$/;
 
 // GET /api/products
 // Query: search, category, minPrice, maxPrice, sort, page, limit
@@ -91,86 +66,76 @@ exports.list = async (req, res) => {
     sort = 'popular', page = 1, limit = 100, includeInactive,
   } = req.query;
 
-  const where = [];
-  const params = [];
+  const filter = {};
 
   if (!includeInactive || req.user?.role !== 'admin') {
-    where.push('is_active = 1');
+    filter.isActive = true;
   }
   if (category) {
-    where.push('category = ?');
-    params.push(category);
+    filter.category = category;
   }
-  if (minPrice) {
-    where.push('price >= ?');
-    params.push(Number(minPrice));
-  }
-  if (maxPrice) {
-    where.push('price <= ?');
-    params.push(Number(maxPrice));
+  if (minPrice || maxPrice) {
+    filter.price = {};
+    if (minPrice) filter.price.$gte = Number(minPrice);
+    if (maxPrice) filter.price.$lte = Number(maxPrice);
   }
   if (search) {
-    where.push('(name LIKE ? OR brand LIKE ? OR category LIKE ? OR JSON_SEARCH(compatible_models, "one", ?) IS NOT NULL)');
-    const like = `%${search}%`;
-    params.push(like, like, like, `%${search}%`);
+    const re = new RegExp(search, 'i');
+    filter.$or = [
+      { name: re },
+      { brand: re },
+      { category: re },
+      { compatibleModels: re },
+    ];
   }
 
-  const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : '';
-
   const sortMap = {
-    popular: 'rating DESC',
-    'price-asc': 'price ASC',
-    'price-desc': 'price DESC',
-    newest: 'created_at DESC',
-    rating: 'rating DESC',
+    popular: { rating: -1 },
+    'price-asc': { price: 1 },
+    'price-desc': { price: -1 },
+    newest: { createdAt: -1 },
+    rating: { rating: -1 },
   };
-  const orderBy = sortMap[sort] || sortMap.popular;
+  const sortBy = sortMap[sort] || sortMap.popular;
 
   const pageNum = Math.max(1, parseInt(page, 10) || 1);
   const limitNum = Math.min(200, Math.max(1, parseInt(limit, 10) || 100));
-  const offset = (pageNum - 1) * limitNum;
+  const skip = (pageNum - 1) * limitNum;
 
-  const [rows] = await pool.query(
-    `SELECT * FROM products ${whereClause} ORDER BY ${orderBy} LIMIT ? OFFSET ?`,
-    [...params, limitNum, offset]
-  );
-  const [[{ total }]] = await pool.query(
-    `SELECT COUNT(*) AS total FROM products ${whereClause}`,
-    params
-  );
-
-  const imagesByProduct = await getImagesForProducts(rows.map((r) => r.id));
+  const [products, total] = await Promise.all([
+    Product.find(filter).sort(sortBy).skip(skip).limit(limitNum),
+    Product.countDocuments(filter),
+  ]);
 
   res.json({
     success: true,
-    products: rows.map((r) => toProductDTO(r, req, imagesByProduct[r.id] || [])),
+    products: products.map(toProductDTO),
     pagination: { page: pageNum, limit: limitNum, total },
   });
 };
 
 // GET /api/products/categories — distinct categories with counts, for shop filters
 exports.listCategories = async (req, res) => {
-  const [rows] = await pool.query(
-    `SELECT category AS label, COUNT(*) AS count
-     FROM products WHERE is_active = 1
-     GROUP BY category ORDER BY category ASC`
-  );
-  res.json({ success: true, categories: rows });
+  const categories = await Product.aggregate([
+    { $match: { isActive: true } },
+    { $group: { _id: '$category', count: { $sum: 1 } } },
+    { $project: { _id: 0, label: '$_id', count: 1 } },
+    { $sort: { label: 1 } },
+  ]);
+  res.json({ success: true, categories });
 };
 
 // GET /api/products/:idOrSlug
 exports.getOne = async (req, res) => {
   const { idOrSlug } = req.params;
-  const isNumeric = /^\d+$/.test(idOrSlug);
-  const [rows] = await pool.query(
-    `SELECT * FROM products WHERE ${isNumeric ? 'id' : 'slug'} = ? LIMIT 1`,
-    [idOrSlug]
-  );
-  if (!rows.length) {
+  const product = OBJECT_ID_RE.test(idOrSlug)
+    ? await Product.findById(idOrSlug)
+    : await Product.findOne({ slug: idOrSlug });
+
+  if (!product) {
     return res.status(404).json({ success: false, message: 'Product not found.' });
   }
-  const [images] = await pool.query('SELECT * FROM product_images WHERE product_id = ? ORDER BY sort_order, id', [rows[0].id]);
-  res.json({ success: true, product: toProductDTO(rows[0], req, images) });
+  res.json({ success: true, product: toProductDTO(product) });
 };
 
 // POST /api/products  (admin only, multipart/form-data with up to 6 `images` files)
@@ -186,131 +151,112 @@ exports.create = async (req, res) => {
 
   const slug = await generateUniqueSlug(name);
   const files = req.files || [];
-  const primaryImageUrl = files.length ? `/uploads/products/${files[0].filename}` : null;
+  // multer-storage-cloudinary sets `.path` to the uploaded image's full Cloudinary URL.
+  const images = files.map((f, i) => ({ url: f.path, sortOrder: i }));
 
-  const [result] = await pool.query(
-    `INSERT INTO products
-      (name, slug, description, price, compare_at_price, category, brand, badge, image_url, bg_gradient, compatible_models, stock)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      name.trim(),
-      slug,
-      description?.trim() || null,
-      Number(price),
-      compareAtPrice ? Number(compareAtPrice) : null,
-      category.trim(),
-      brand.trim(),
-      badge || null,
-      primaryImageUrl,
-      bgGradient || 'linear-gradient(135deg, #1e293b, #334155)',
-      JSON.stringify(parseCompatibleModels(compatibleModels)),
-      Number(stock) || 0,
-    ]
-  );
+  const product = await Product.create({
+    name: name.trim(),
+    slug,
+    description: description?.trim() || null,
+    price: Number(price),
+    compareAtPrice: compareAtPrice ? Number(compareAtPrice) : null,
+    category: category.trim(),
+    brand: brand.trim(),
+    badge: badge || null,
+    imageUrl: images.length ? images[0].url : null,
+    images,
+    bgGradient: bgGradient || 'linear-gradient(135deg, #1e293b, #334155)',
+    compatibleModels: parseCompatibleModels(compatibleModels),
+    stock: Number(stock) || 0,
+  });
 
-  const productId = result.insertId;
-  for (let i = 0; i < files.length; i++) {
-    await pool.query(
-      'INSERT INTO product_images (product_id, image_url, sort_order) VALUES (?, ?, ?)',
-      [productId, `/uploads/products/${files[i].filename}`, i]
-    );
-  }
-
-  const [[row]] = await pool.query('SELECT * FROM products WHERE id = ?', [productId]);
-  const [images] = await pool.query('SELECT * FROM product_images WHERE product_id = ? ORDER BY sort_order, id', [productId]);
-  res.status(201).json({ success: true, product: toProductDTO(row, req, images) });
+  res.status(201).json({ success: true, product: toProductDTO(product) });
 };
 
 // PUT /api/products/:id  (admin only, multipart/form-data — new `images` files are ADDED to the gallery, not replaced)
 exports.update = async (req, res) => {
   const { id } = req.params;
-  const [[existing]] = await pool.query('SELECT * FROM products WHERE id = ?', [id]);
+  const existing = await Product.findById(id);
   if (!existing) {
     return res.status(404).json({ success: false, message: 'Product not found.' });
   }
 
   const { name, description, price, compareAtPrice, category, brand, badge, stock, compatibleModels, bgGradient, isActive } = req.body;
 
-  const effectivePrice = price ? Number(price) : Number(existing.price);
+  const effectivePrice = price ? Number(price) : existing.price;
   const effectiveCompareAt = compareAtPrice !== undefined
     ? (compareAtPrice ? Number(compareAtPrice) : null)
-    : existing.compare_at_price;
+    : existing.compareAtPrice;
   if (effectiveCompareAt && effectiveCompareAt <= effectivePrice) {
     return res.status(400).json({ success: false, message: '"Compare at" price must be higher than the actual price.' });
   }
 
-  const slug = name && name.trim() !== existing.name ? await generateUniqueSlug(name, id) : existing.slug;
+  if (name && name.trim() !== existing.name) {
+    existing.slug = await generateUniqueSlug(name, existing._id);
+  }
 
-  await pool.query(
-    `UPDATE products SET
-      name = ?, slug = ?, description = ?, price = ?, compare_at_price = ?, category = ?, brand = ?,
-      badge = ?, bg_gradient = ?, compatible_models = ?, stock = ?, is_active = ?
-     WHERE id = ?`,
-    [
-      name?.trim() || existing.name,
-      slug,
-      description?.trim() ?? existing.description,
-      price ? Number(price) : existing.price,
-      effectiveCompareAt,
-      category?.trim() || existing.category,
-      brand?.trim() || existing.brand,
-      badge !== undefined ? (badge || null) : existing.badge,
-      bgGradient || existing.bg_gradient,
-      compatibleModels !== undefined
-        ? JSON.stringify(parseCompatibleModels(compatibleModels))
-        : JSON.stringify(existing.compatible_models || []),
-      stock !== undefined ? Number(stock) : existing.stock,
-      isActive !== undefined ? (isActive === 'true' || isActive === true ? 1 : 0) : existing.is_active,
-      id,
-    ]
-  );
+  existing.name = name?.trim() || existing.name;
+  existing.description = description !== undefined ? (description?.trim() ?? null) : existing.description;
+  existing.price = effectivePrice;
+  existing.compareAtPrice = effectiveCompareAt;
+  existing.category = category?.trim() || existing.category;
+  existing.brand = brand?.trim() || existing.brand;
+  existing.badge = badge !== undefined ? (badge || null) : existing.badge;
+  existing.bgGradient = bgGradient || existing.bgGradient;
+  existing.compatibleModels = compatibleModels !== undefined
+    ? parseCompatibleModels(compatibleModels)
+    : existing.compatibleModels;
+  existing.stock = stock !== undefined ? Number(stock) : existing.stock;
+  existing.isActive = isActive !== undefined ? (isActive === 'true' || isActive === true) : existing.isActive;
 
   // Any newly uploaded files are appended after whatever's already in the gallery.
   const files = req.files || [];
   if (files.length) {
-    const [[{ maxOrder }]] = await pool.query(
-      'SELECT COALESCE(MAX(sort_order), -1) AS maxOrder FROM product_images WHERE product_id = ?',
-      [id]
-    );
-    for (let i = 0; i < files.length; i++) {
-      await pool.query(
-        'INSERT INTO product_images (product_id, image_url, sort_order) VALUES (?, ?, ?)',
-        [id, `/uploads/products/${files[i].filename}`, maxOrder + 1 + i]
-      );
-    }
-    await syncPrimaryImage(id);
+    const maxOrder = existing.images.reduce((max, img) => Math.max(max, img.sortOrder), -1);
+    files.forEach((f, i) => {
+      existing.images.push({ url: f.path, sortOrder: maxOrder + 1 + i });
+    });
+    existing.images.sort((a, b) => a.sortOrder - b.sortOrder);
+    existing.imageUrl = existing.images[0]?.url || null;
   }
 
-  const [[row]] = await pool.query('SELECT * FROM products WHERE id = ?', [id]);
-  const [images] = await pool.query('SELECT * FROM product_images WHERE product_id = ? ORDER BY sort_order, id', [id]);
-  res.json({ success: true, product: toProductDTO(row, req, images) });
+  await existing.save();
+  res.json({ success: true, product: toProductDTO(existing) });
 };
 
 // DELETE /api/products/:id/images/:imageId  (admin only) — removes one gallery photo
 exports.removeImage = async (req, res) => {
   const { id, imageId } = req.params;
-  const [[image]] = await pool.query('SELECT * FROM product_images WHERE id = ? AND product_id = ?', [imageId, id]);
+  const product = await Product.findById(id);
+  if (!product) {
+    return res.status(404).json({ success: false, message: 'Product not found.' });
+  }
+
+  const image = product.images.id(imageId);
   if (!image) {
     return res.status(404).json({ success: false, message: 'Image not found.' });
   }
 
-  await pool.query('DELETE FROM product_images WHERE id = ?', [imageId]);
+  const imageUrl = image.url;
+  product.images.pull(imageId);
+  product.images.sort((a, b) => a.sortOrder - b.sortOrder);
+  product.imageUrl = product.images[0]?.url || null;
+  await product.save();
 
-  // Best-effort: remove the actual file from disk too.
-  const filePath = path.join(__dirname, '..', image.image_url);
-  fs.unlink(filePath, () => {}); // ignore errors — a missing file shouldn't block the API response
+  // Best-effort: remove the actual file from Cloudinary too.
+  deleteFromCloudinary(imageUrl); // fire-and-forget, ignores errors internally
 
-  await syncPrimaryImage(id);
-
-  const [images] = await pool.query('SELECT * FROM product_images WHERE product_id = ? ORDER BY sort_order, id', [id]);
-  res.json({ success: true, images: images.map((img) => ({ id: img.id, url: toAbsoluteUrl(req, img.image_url) })) });
+  res.json({
+    success: true,
+    images: product.images.map((img) => ({ id: img._id.toString(), url: img.url })),
+  });
 };
 
 // DELETE /api/products/:id  (admin only)
 exports.remove = async (req, res) => {
   const { id } = req.params;
-  const [result] = await pool.query('DELETE FROM products WHERE id = ?', [id]);
-  if (!result.affectedRows) {
+  const result = await Product.findByIdAndDelete(id);
+  if (!result) {
     return res.status(404).json({ success: false, message: 'Product not found.' });
   }
   res.json({ success: true, message: 'Product deleted.' });

@@ -1,5 +1,7 @@
 const jwt = require('jsonwebtoken');
-const { pool } = require('../config/db');
+const User = require('../models/User');
+
+const USER_SELECT_FIELDS = 'name email role avatarUrl phone googleId emailVerified';
 
 // Verifies the JWT from the httpOnly cookie (or Authorization header as a
 // fallback) and attaches the authenticated user to req.user.
@@ -17,14 +19,11 @@ const protect = async (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const [rows] = await pool.query(
- 'SELECT id, name, email, role, avatar_url, phone, google_id, email_verified FROM users WHERE id = ? LIMIT 1',
-      [decoded.id]
-    );
-    if (!rows.length) {
+    const user = await User.findById(decoded.id).select(USER_SELECT_FIELDS);
+    if (!user) {
       return res.status(401).json({ success: false, message: 'User no longer exists.' });
     }
-    req.user = rows[0];
+    req.user = user;
     next();
   } catch {
     return res.status(401).json({ success: false, message: 'Session expired. Please log in again.' });
@@ -49,11 +48,8 @@ const optionalAuth = async (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const [rows] = await pool.query(
-      'SELECT id, name, email, role, avatar_url, phone, google_id, email_verified FROM users WHERE id = ? LIMIT 1',
-      [decoded.id]
-    );
-    if (rows.length) req.user = rows[0];
+    const user = await User.findById(decoded.id).select(USER_SELECT_FIELDS);
+    if (user) req.user = user;
   } catch {
     // invalid/expired token on a public route — just proceed as a guest
   }

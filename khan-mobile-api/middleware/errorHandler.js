@@ -3,8 +3,14 @@
 const errorHandler = (err, req, res, next) => { // eslint-disable-line no-unused-vars
   console.error(err);
 
-  if (err.code === 'ER_DUP_ENTRY') {
+  if (err.code === 11000) {
     return res.status(409).json({ success: false, message: 'That value is already in use.' });
+  }
+  if (err.name === 'ValidationError') {
+    return res.status(400).json({ success: false, message: Object.values(err.errors)[0]?.message || 'Invalid data.' });
+  }
+  if (err.name === 'CastError') {
+    return res.status(400).json({ success: false, message: 'Invalid ID.' });
   }
   if (err instanceof (require('multer').MulterError)) {
     return res.status(400).json({ success: false, message: err.message });

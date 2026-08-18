@@ -1,21 +1,10 @@
-const mysql = require('mysql2/promise');
+const mongoose = require('mongoose');
 
-const pool = mysql.createPool({
-  host: process.env.DB_HOST,
-  port: process.env.DB_PORT || 3306,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0,
-  decimalNumbers: true, // return DECIMAL columns as JS numbers, not strings
-});
-
-const testConnection = async () => {
-  const conn = await pool.getConnection();
-  await conn.ping();
-  conn.release();
+const connect = async () => {
+  await mongoose.connect(process.env.MONGODB_URI, {
+    // Mongoose 7+ doesn't need useNewUrlParser/useUnifiedTopology anymore —
+    // they're the default and passing them just prints a deprecation warning.
+  });
 };
 
-module.exports = { pool, testConnection };
+module.exports = { mongoose, connect };

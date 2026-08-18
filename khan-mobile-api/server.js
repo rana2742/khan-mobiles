@@ -9,7 +9,7 @@ const morgan = require('morgan');
 const helmet = require('helmet');
 const compression = require('compression');
 
-const { testConnection, pool } = require('./config/db');
+const { connect, mongoose } = require('./config/db');
 const errorHandler = require('./middleware/errorHandler');
 const { apiLimiter } = require('./middleware/rateLimit');
 
@@ -58,13 +58,11 @@ let server;
 
 const start = async () => {
   try {
-    await testConnection();
-    console.log('MySQL connected.');
+    await connect();
+    console.log('MongoDB connected.');
     server = app.listen(PORT, () => console.log(`Khan Mobile Shop API listening on port ${PORT}`));
   } catch (err) {
-    console.error('Failed to connect to MySQL.');
-    console.error(`  Trying to reach: ${process.env.DB_HOST}:${process.env.DB_PORT || 3306} as user "${process.env.DB_USER}", database "${process.env.DB_NAME}"`);
-    console.error(`  Error code: ${err.code || '(none)'}`);
+    console.error('Failed to connect to MongoDB.');
     console.error(`  Error message: ${err.message || '(empty — see full error below)'}`);
     console.error(err);
     process.exit(1);
@@ -77,7 +75,7 @@ const shutdown = (signal) => {
   console.log(`\n${signal} received. Shutting down gracefully...`);
   if (server) {
     server.close(async () => {
-      await pool.end();
+      await mongoose.connection.close();
       console.log('Closed out remaining connections. Goodbye.');
       process.exit(0);
     });

@@ -1,4 +1,4 @@
-const { pool } = require('../config/db');
+const Product = require('../models/Product');
 
 // The frontend's public domain — sitemap URLs must point at the site
 // customers/Google actually visit, not this API's own domain.
@@ -9,22 +9,18 @@ const STATIC_PAGES = ['', '/shop', '/categories', '/about', '/contact'];
 // GET /sitemap.xml — regenerated fresh on every request from whatever's
 // currently active, so it never goes stale as products are added/removed.
 exports.sitemap = async (req, res) => {
-  const [products] = await pool.query(
-    'SELECT slug, updated_at FROM products WHERE is_active = 1 ORDER BY updated_at DESC'
-  );
-  const [categories] = await pool.query(
-    "SELECT DISTINCT category FROM products WHERE is_active = 1"
-  );
+  const products = await Product.find({ isActive: true }).select('slug updatedAt').sort({ updatedAt: -1 });
+  const categories = await Product.distinct('category', { isActive: true });
 
   const urls = [
     ...STATIC_PAGES.map((p) => ({ loc: `${SITE_URL}${p}`, priority: p === '' ? '1.0' : '0.8' })),
     ...categories.map((c) => ({
-      loc: `${SITE_URL}/shop?category=${encodeURIComponent(c.category)}`,
+      loc: `${SITE_URL}/shop?category=${encodeURIComponent(c)}`,
       priority: '0.6',
     })),
     ...products.map((p) => ({
       loc: `${SITE_URL}/product/${p.slug}`,
-      lastmod: new Date(p.updated_at).toISOString().split('T')[0],
+      lastmod: new Date(p.updatedAt).toISOString().split('T')[0],
       priority: '0.7',
     })),
   ];

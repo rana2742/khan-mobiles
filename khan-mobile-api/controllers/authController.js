@@ -2,7 +2,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const { OAuth2Client } = require('google-auth-library');
-const { pool } = require('../config/db');
+const User = require('../models/User');
 const { sendMail, sendVerificationEmail } = require('../utils/email');
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
@@ -22,43 +22,36 @@ const cookieOptions = () => ({
   maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
 });
 
+const toUserDTO = (user) => ({
+  id: user._id.toString(),
+  name: user.name,
+  email: user.email,
+  role: user.role,
+  avatarUrl: user.avatarUrl,
+  phone: user.phone,
+  hasGoogleLinked: !!user.googleId,
+  // Admins are always considered verified, no matter what's in the DB —
+  // this covers cases like changing the admin email/password directly,
+  // which would otherwise leave emailVerified at false for the new row.
+  emailVerified: user.role === 'admin' ? true : !!user.emailVerified,
+});
+
 const sendAuthResponse = (res, statusCode, user) => {
-  const token = signToken(user.id);
+  const token = signToken(user._id.toString());
   res.cookie(process.env.COOKIE_NAME || 'khan_token', token, cookieOptions());
   res.status(statusCode).json({ success: true, user: toUserDTO(user) });
 };
 
- const publicUserFields =
-  'id, name, email, role, avatar_url, phone, google_id, email_verified';
+const VERIFY_TOKEN_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
-const toUserDTO = (user) => ({
-  id: user.id,
-  name: user.name,
-  email: user.email,
-  role: user.role,
-  avatarUrl: user.avatar_url,
-  phone: user.phone,
-  hasGoogleLinked: !!user.google_id,
-  // Admins are always considered verified, no matter what's in the DB —
-  // this covers cases like changing the admin email/password directly,
-  // which would otherwise leave email_verified at 0 for the new row.
-  emailVerified: user.role === 'admin' ? true : !!user.email_verified,
-});
-
-// POST /api/auth/register
- const VERIFY_TOKEN_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
-
-const sendVerificationForUser = (user) => {
+const sendVerificationForUser = async (user) => {
   const rawToken = crypto.randomBytes(32).toString('hex');
   const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
   const expires = new Date(Date.now() + VERIFY_TOKEN_TTL_MS);
 
-  return pool.query('UPDATE users SET verify_token_hash = ?, verify_token_expires = ? WHERE id = ?', [
-    tokenHash, expires, user.id,
-  ]).then(() => {
-    const verifyUrl = `${process.env.CLIENT_URL}/verify-email?token=${rawToken}&email=${encodeURIComponent(user.email)}`;
-    return sendVerificationEmail(user, verifyUrl);
-  });
+  await User.updateOne({ _id: user._id }, { verifyTokenHash: tokenHash, verifyTokenExpires: expires });
+  const verifyUrl = `${process.env.CLIENT_URL}/verify-email?token=${rawToken}&email=${encodeURIComponent(user.email)}`;
+  return sendVerificationEmail(user, verifyUrl);
 };
 
 // POST /api/auth/register
@@ -73,18 +66,20 @@ exports.register = async (req, res) => {
   }
 
   const normalizedEmail = email.trim().toLowerCase();
-  const [existing] = await pool.query('SELECT id FROM users WHERE email = ? LIMIT 1', [normalizedEmail]);
-  if (existing.length) {
+  const existing = await User.exists({ email: normalizedEmail });
+  if (existing) {
     return res.status(409).json({ success: false, message: 'An account with that email already exists.' });
   }
 
   const hashed = await bcrypt.hash(password, 12);
-  const [result] = await pool.query(
-    'INSERT INTO users (name, email, password, role, email_verified) VALUES (?, ?, ?, ?, 0)',
-    [name.trim(), normalizedEmail, hashed, 'user']
-  );
+  const user = await User.create({
+    name: name.trim(),
+    email: normalizedEmail,
+    password: hashed,
+    role: 'user',
+    emailVerified: false,
+  });
 
-  const [[user]] = await pool.query(`SELECT ${publicUserFields} FROM users WHERE id = ?`, [result.insertId]);
   sendVerificationForUser(user).catch(() => {}); // fire-and-forget, never blocks signup
   sendAuthResponse(res, 201, user);
 };
@@ -96,8 +91,7 @@ exports.login = async (req, res) => {
     return res.status(400).json({ success: false, message: 'Email and password are required.' });
   }
 
-  const [rows] = await pool.query('SELECT * FROM users WHERE email = ? LIMIT 1', [email.trim().toLowerCase()]);
-  const user = rows[0];
+  const user = await User.findOne({ email: email.trim().toLowerCase() }).select('+password');
 
   if (!user || !user.password) {
     return res.status(401).json({ success: false, message: 'Invalid email or password.' });
@@ -138,30 +132,24 @@ exports.googleAuth = async (req, res) => {
 
   const { sub: googleId, email, name, picture } = payload;
 
-  const [rows] = await pool.query(
-    'SELECT * FROM users WHERE google_id = ? OR email = ? LIMIT 1',
-    [googleId, email.toLowerCase()]
-  );
+  let user = await User.findOne({ $or: [{ googleId }, { email: email.toLowerCase() }] });
 
-  let user = rows[0];
-
- if (!user) {
-    const [result] = await pool.query(
-      'INSERT INTO users (name, email, google_id, avatar_url, role, email_verified) VALUES (?, ?, ?, ?, ?, 1)',
-      [name || email, email.toLowerCase(), googleId, picture || null, 'user']
-    );
-    const [[created]] = await pool.query(`SELECT ${publicUserFields} FROM users WHERE id = ?`, [result.insertId]);
-    user = created;
-  } else if (!user.google_id) {
+  if (!user) {
+    user = await User.create({
+      name: name || email,
+      email: email.toLowerCase(),
+      googleId,
+      avatarUrl: picture || null,
+      role: 'user',
+      emailVerified: true,
+    });
+  } else if (!user.googleId) {
     // Existing email/password account signing in with Google for the first time — link it.
     // Google has already confirmed this email address, so mark it verified too.
-    await pool.query('UPDATE users SET google_id = ?, avatar_url = COALESCE(avatar_url, ?), email_verified = 1 WHERE id = ?', [
-      googleId,
-      picture || null,
-      user.id,
-    ]);
-    user.google_id = googleId;
-    user.email_verified = 1;
+    user.googleId = googleId;
+    user.avatarUrl = user.avatarUrl || picture || null;
+    user.emailVerified = true;
+    await user.save();
   }
 
   sendAuthResponse(res, 200, user);
@@ -194,7 +182,7 @@ exports.forgotPassword = async (req, res) => {
     return res.status(400).json({ success: false, message: 'Email is required.' });
   }
 
-  const [[user]] = await pool.query('SELECT id, name, password FROM users WHERE email = ? LIMIT 1', [email.trim().toLowerCase()]);
+  const user = await User.findOne({ email: email.trim().toLowerCase() }).select('+password');
 
   // No account, or a Google-only account with no password to reset — say
   // nothing different, just don't actually send an email.
@@ -206,9 +194,7 @@ exports.forgotPassword = async (req, res) => {
   const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
   const expires = new Date(Date.now() + RESET_TOKEN_TTL_MS);
 
-  await pool.query('UPDATE users SET reset_token_hash = ?, reset_token_expires = ? WHERE id = ?', [
-    tokenHash, expires, user.id,
-  ]);
+  await User.updateOne({ _id: user._id }, { resetTokenHash: tokenHash, resetTokenExpires: expires });
 
   const resetUrl = `${process.env.CLIENT_URL}/reset-password?token=${rawToken}&email=${encodeURIComponent(email.trim().toLowerCase())}`;
 
@@ -244,23 +230,24 @@ exports.resetPassword = async (req, res) => {
 
   const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
 
-  const [[user]] = await pool.query(
-    'SELECT id, reset_token_expires FROM users WHERE email = ? AND reset_token_hash = ? LIMIT 1',
-    [email.trim().toLowerCase(), tokenHash]
-  );
+  const user = await User.findOne({
+    email: email.trim().toLowerCase(),
+    resetTokenHash: tokenHash,
+  }).select('+resetTokenHash');
 
-  if (!user || !user.reset_token_expires || new Date(user.reset_token_expires) < new Date()) {
+  if (!user || !user.resetTokenExpires || new Date(user.resetTokenExpires) < new Date()) {
     return res.status(400).json({ success: false, message: 'This reset link is invalid or has expired. Please request a new one.' });
   }
 
   const hashed = await bcrypt.hash(password, 12);
-  await pool.query(
-    'UPDATE users SET password = ?, reset_token_hash = NULL, reset_token_expires = NULL WHERE id = ?',
-    [hashed, user.id]
+  await User.updateOne(
+    { _id: user._id },
+    { password: hashed, resetTokenHash: null, resetTokenExpires: null }
   );
 
   res.json({ success: true, message: 'Your password has been reset. You can now log in.' });
 };
+
 // POST /api/auth/verify-email
 // Body: { email, token }
 exports.verifyEmail = async (req, res) => {
@@ -272,18 +259,18 @@ exports.verifyEmail = async (req, res) => {
 
   const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
 
-  const [[user]] = await pool.query(
-    'SELECT id, verify_token_expires FROM users WHERE email = ? AND verify_token_hash = ? LIMIT 1',
-    [email.trim().toLowerCase(), tokenHash]
-  );
+  const user = await User.findOne({
+    email: email.trim().toLowerCase(),
+    verifyTokenHash: tokenHash,
+  }).select('+verifyTokenHash');
 
-  if (!user || !user.verify_token_expires || new Date(user.verify_token_expires) < new Date()) {
+  if (!user || !user.verifyTokenExpires || new Date(user.verifyTokenExpires) < new Date()) {
     return res.status(400).json({ success: false, message: 'This verification link is invalid or has expired. Please request a new one.' });
   }
 
-  await pool.query(
-    'UPDATE users SET email_verified = 1, verify_token_hash = NULL, verify_token_expires = NULL WHERE id = ?',
-    [user.id]
+  await User.updateOne(
+    { _id: user._id },
+    { emailVerified: true, verifyTokenHash: null, verifyTokenExpires: null }
   );
 
   res.json({ success: true, message: 'Your email has been verified.' });
@@ -291,11 +278,11 @@ exports.verifyEmail = async (req, res) => {
 
 // POST /api/auth/resend-verification  (requires auth)
 exports.resendVerification = async (req, res) => {
-  if (req.user.role === 'admin' || req.user.email_verified) {
+  if (req.user.role === 'admin' || req.user.emailVerified) {
     return res.json({ success: true, message: 'Your email is already verified.' });
   }
 
-  const [[user]] = await pool.query('SELECT id, name, email FROM users WHERE id = ?', [req.user.id]);
+  const user = await User.findById(req.user._id);
   await sendVerificationForUser(user).catch(() => {});
 
   res.json({ success: true, message: 'Verification email sent — please check your inbox.' });
