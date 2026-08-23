@@ -17,13 +17,13 @@ const FROM = `"${process.env.EMAIL_FROM_NAME || 'Khan Mobile Shop'}" <${process.
 
 // Sends best-effort — a failed/unconfigured email never blocks the order flow
 // itself (checkout still succeeds even if the confirmation email can't be sent).
-const sendMail = async ({ to, subject, html }) => {
+const sendMail = async ({ to, subject, html, attachments }) => {
   if (!isConfigured) {
     console.log(`[email] Skipped "${subject}" to ${to} — EMAIL_USER/EMAIL_APP_PASSWORD not set in .env.`);
     return { sent: false, reason: 'not_configured' };
   }
   try {
-    await transporter.sendMail({ from: FROM, to, subject, html });
+    await transporter.sendMail({ from: FROM, to, subject, html, attachments });
     return { sent: true };
   } catch (err) {
     console.error(`[email] Failed to send "${subject}" to ${to}:`, err.message);

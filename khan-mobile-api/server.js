@@ -9,9 +9,12 @@ const morgan = require('morgan');
 const helmet = require('helmet');
 const compression = require('compression');
 
+const cron = require('node-cron');
 const { connect, mongoose } = require('./config/db');
 const errorHandler = require('./middleware/errorHandler');
 const { apiLimiter } = require('./middleware/rateLimit');
+const { protect, adminOnly } = require('./middleware/auth');
+const { runBackupAndEmail } = require('./utils/backup');
 
 const authRoutes = require('./routes/authRoutes');
 const productRoutes = require('./routes/productRoutes');
@@ -30,21 +33,7 @@ app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' }, // allow the frontend origin to load /uploads images
 }));
 app.use(compression());
-const allowedOrigins = (process.env.CLIENT_URL || 'http://localhost:5173')
-  .split(',')
-  .map((o) => o.trim());
-
-app.use(cors({
-  origin: (origin, callback) => {
-    // allow requests with no origin (e.g. curl, mobile apps, server-to-server)
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  credentials: true,
-}));
+app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:5173', credentials: true }));
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 app.use(cookieParser());
@@ -63,6 +52,16 @@ app.use('/api/orders', orderRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/contact', contactRoutes);
 
+// Admin-only: trigger the same backup the weekly cron job runs, on demand —
+// useful right before a risky change, without waiting for the schedule.
+app.post('/api/admin/backup', protect, adminOnly, async (req, res) => {
+  const result = await runBackupAndEmail();
+  if (!result.sent) {
+    return res.status(500).json({ success: false, message: `Backup failed: ${result.reason}` });
+  }
+  res.json({ success: true, message: 'Backup sent.' });
+});
+
 app.use((req, res) => res.status(404).json({ success: false, message: 'Route not found.' }));
 app.use(errorHandler);
 
@@ -75,6 +74,17 @@ const start = async () => {
     await connect();
     console.log('MongoDB connected.');
     server = app.listen(PORT, () => console.log(`Khan Mobile Shop API listening on port ${PORT}`));
+
+    // Weekly database backup, emailed as a zip. Default: every Sunday at
+    // 3:00 AM server time. Override with BACKUP_CRON_SCHEDULE (standard
+    // 5-field cron syntax) in .env, or set BACKUP_ENABLED=false to disable.
+    if (process.env.BACKUP_ENABLED !== 'false') {
+      const schedule = process.env.BACKUP_CRON_SCHEDULE || '0 3 * * 0';
+      cron.schedule(schedule, () => {
+        runBackupAndEmail().catch((err) => console.error('[backup] Unexpected error:', err));
+      });
+      console.log(`Weekly backup scheduled (cron: "${schedule}").`);
+    }
   } catch (err) {
     console.error('Failed to connect to MongoDB.');
     console.error(`  Error message: ${err.message || '(empty — see full error below)'}`);
@@ -104,4 +114,3 @@ process.on('SIGTERM', () => shutdown('SIGTERM'));
 start();
 
 module.exports = app;
-// force rebuild
