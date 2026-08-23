@@ -22,7 +22,7 @@ export const SLIDES_DATA = [
     headline: 'Stay Connected',
     subtext: 'Discover stylish smartwatches with fitness tracking, heart-rate monitoring, and long-lasting battery life.',
     cta: 'Explore Watches',
-    bgImage: '/images/watch.jpg',
+    bgImage: '/images/watch.png',
     accentColor: '#0EA5E9',
     category: 'Smartwatches',
   },
@@ -35,8 +35,17 @@ export const SLIDES_DATA = [
     accentColor: '#eab308',
     category: 'Earbuds',
   },
-  {
+    {
     id: 'slide-5',
+    headline: 'True Wireless Freedom',
+    subtext: 'Compact earbuds with rich sound and all-day battery life.',
+    cta: 'Shop Earbuds',
+    bgImage: '/images/eirbuds2.png',
+    accentColor: '#eab308',
+    category: 'Earbuds',
+  },
+  {
+    id: 'slide-6',
     headline: 'Never Run Out of Power',
     subtext: 'High-capacity power banks for charging on the go.',
     cta: 'Shop Power Banks',
@@ -45,7 +54,7 @@ export const SLIDES_DATA = [
     category: 'Power Banks',
   },
   {
-    id: 'slide-6',
+    id: 'slide-7',
     headline: 'Protect What Matters',
     subtext: 'Tempered glass and film protectors for every screen.',
     cta: 'Shop Protectors',

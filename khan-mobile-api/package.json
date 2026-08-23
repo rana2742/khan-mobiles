@@ -1,6 +1,6 @@
 {
   "name": "khan-mobile-api",
-  "version": "3.0.1",
+  "version": "3.0.2",
   "description": "Khan Mobile Shop REST API (MongoDB)",
   "main": "server.js",
   "type": "commonjs",
