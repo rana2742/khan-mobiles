@@ -33,7 +33,22 @@ app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' }, // allow the frontend origin to load /uploads images
 }));
 app.use(compression());
-app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:5173', credentials: true }));
+// CLIENT_URLS accepts a comma-separated list (e.g. during a domain
+// transition, when both a Vercel-assigned URL and a custom domain are live
+// at once). Falls back to the single CLIENT_URL if CLIENT_URLS isn't set.
+const allowedOrigins = (process.env.CLIENT_URLS || process.env.CLIENT_URL || 'http://localhost:5173')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // No Origin header (server-to-server requests, curl, etc.) — allow.
+    if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+    callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true,
+}));
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 app.use(cookieParser());
