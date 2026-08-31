@@ -5,6 +5,7 @@ export const SLIDES_DATA = [
     subtext: 'Ultra-fast chargers & power banks that keep you going all day.',
     cta: 'Shop Chargers',
     bgImage: '/images/charger.jpg',
+    bgPosition: '80% center', // shift focus right, toward the headphones
     accentColor: '#a855f7',
     category: 'Chargers',
   },
@@ -14,6 +15,7 @@ export const SLIDES_DATA = [
     subtext: 'Crystal-clear earphones & headphones at unbeatable prices.',
     cta: 'Shop Audio',
     bgImage: '/images/headphone.png',
+    bgPosition: '80% center', // shift focus right, toward the headphones
     accentColor: '#22c55e',
     category: 'Earphones',
   },
@@ -23,6 +25,7 @@ export const SLIDES_DATA = [
     subtext: 'Discover stylish smartwatches with fitness tracking, heart-rate monitoring, and long-lasting battery life.',
     cta: 'Explore Watches',
     bgImage: '/images/watch.png',
+    bgPosition: '20% center', // shift focus left, toward the watch
     accentColor: '#0EA5E9',
     category: 'Smartwatches',
   },
@@ -32,6 +35,7 @@ export const SLIDES_DATA = [
     subtext: 'Compact earbuds with rich sound and all-day battery life.',
     cta: 'Shop Earbuds',
     bgImage: '/images/airbuds.png',
+    bgPosition: '80% center', // shift focus right, toward the headphones
     accentColor: '#eab308',
     category: 'Earbuds',
   },
@@ -41,6 +45,7 @@ export const SLIDES_DATA = [
     subtext: 'Compact earbuds with rich sound and all-day battery life.',
     cta: 'Shop Earbuds',
     bgImage: '/images/eirbuds2.png',
+    bgPosition: '80% center', // shift focus right, toward the headphones
     accentColor: '#eab308',
     category: 'Earbuds',
   },
@@ -50,6 +55,7 @@ export const SLIDES_DATA = [
     subtext: 'High-capacity power banks for charging on the go.',
     cta: 'Shop Power Banks',
     bgImage: '/images/powerbank.jpg',
+    bgPosition: '80% center', // shift focus right, toward the headphones
     accentColor: '#ef4444',
     category: 'Power Banks',
   },
@@ -59,6 +65,7 @@ export const SLIDES_DATA = [
     subtext: 'Tempered glass and film protectors for every screen.',
     cta: 'Shop Protectors',
     bgImage: '/images/screenprotector.jpg',
+    bgPosition: '80% center', // shift focus right, toward the screen protector
     accentColor: '#14b8a6',
     category: 'Screen Protectors',
   },

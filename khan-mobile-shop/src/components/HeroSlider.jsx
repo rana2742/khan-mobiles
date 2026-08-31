@@ -34,7 +34,7 @@ const HeroSlider = () => {
   const slide = SLIDES_DATA[current];
 
   return (
-    <section className="relative overflow-hidden" style={{ height: 'calc(100vh - 64px)', minHeight: '480px' }}>
+    <section className="relative overflow-hidden h-[65vh] min-h-[420px] max-h-[560px] md:h-[calc(100vh-64px)] md:max-h-none md:min-h-[480px]">
       <AnimatePresence initial={false} custom={direction} mode="wait">
         <motion.div key={current} custom={direction} variants={slideVariants}
           initial="enter" animate="center" exit="exit"
@@ -43,18 +43,18 @@ const HeroSlider = () => {
 
           {/* Ken Burns background */}
      {/* Background Image */}
-<motion.div
+ <motion.div
   key={`bg-${current}`}
   className="absolute inset-0"
- style={{
-  backgroundImage: `url(${slide.bgImage})`,
-  backgroundSize: 'cover',
-  backgroundPosition: 'center',
-  backgroundRepeat: 'no-repeat',
-}}
+  style={{
+    backgroundImage: `url(${slide.bgImage})`,
+    backgroundSize: 'cover',
+    backgroundPosition: slide.bgPosition || 'center',
+    backgroundRepeat: 'no-repeat',
+  }}
   initial={{ scale: 1 }}
   animate={{ scale: 1.08 }}
-  transition={{ duration: 6, ease: "linear" }}
+  transition={{ duration: 6, ease: 'linear' }}
 />
 
 {/* Dark Overlay */}
