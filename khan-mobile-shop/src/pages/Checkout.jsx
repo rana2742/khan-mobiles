@@ -27,12 +27,27 @@ const emptyForm = {
   const [checkingAgain, setCheckingAgain] = useState(false);
   const navigate = useNavigate();
 
-  // Prefill from the logged-in account so returning customers don't retype it.
   useEffect(() => {
     if (user) {
       setForm((f) => ({ ...f, fullName: f.fullName || user.name || '', email: f.email || user.email || '' }));
     }
   }, [user]);
+
+  useEffect(() => {
+    if (!items.length || !window.ttq) return;
+
+    window.ttq.track('InitiateCheckout', {
+      contents: items.map((item) => ({
+        content_id: String(item.id),
+        content_name: item.name,
+        content_type: 'product',
+        quantity: Number(item.quantity),
+        price: Number(item.price),
+      })),
+      value: Number(total),
+      currency: 'PKR',
+    });
+  }, [items, total]);
 
   const handleResendVerification = async () => {
     setResending(true);
@@ -52,9 +67,6 @@ const emptyForm = {
     setCheckingAgain(false);
   };
 
-  // Verified email is required to actually place an order (checked again,
-  // server-side, when the order is submitted) — but we check it here too so
-  // nobody wastes time filling out the whole form first.
   if (user && !user.emailVerified && !user.hasGoogleLinked) {
     return (
       <>
@@ -228,7 +240,6 @@ const emptyForm = {
               </div>
             </div>
 
-            {/* Summary */}
             <div>
               <div className="bg-navy-800 rounded-xl2 p-6 sticky top-24 space-y-4">
                 <h2 className="text-lg font-bold text-slate-900">Order Summary</h2>
