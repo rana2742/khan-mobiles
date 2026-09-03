@@ -112,6 +112,23 @@ const ProductDetail = () => {
 
   useEffect(() => { loadProduct(); window.scrollTo(0, 0); }, [loadProduct]);
 
+  useEffect(() => {
+    if (!product || !window.ttq) return;
+
+    window.ttq.track('ViewContent', {
+      contents: [{
+        content_id: String(product.id),
+        content_name: product.name,
+        content_type: 'product',
+        quantity: 1,
+        price: Number(product.price),
+      }],
+      content_type: 'product',
+      value: Number(product.price),
+      currency: 'PKR',
+    });
+  }, [product]);
+
   if (loading) {
     return (
       <>
@@ -156,11 +173,37 @@ const ProductDetail = () => {
     addItem(product, quantity);
     setAdded(true);
     setTimeout(() => setAdded(false), 2000);
+
+    window.ttq?.track('AddToCart', {
+      contents: [{
+        content_id: String(product.id),
+        content_name: product.name,
+        content_type: 'product',
+        quantity: Number(quantity),
+        price: Number(product.price),
+      }],
+      content_type: 'product',
+      value: Number(product.price) * Number(quantity),
+      currency: 'PKR',
+    });
   };
 
   const handleBuyNow = () => {
     if (!isAuthenticated) return requireLogin();
     addItem(product, quantity);
+
+    window.ttq?.track('InitiateCheckout', {
+      contents: [{
+        content_id: String(product.id),
+        content_name: product.name,
+        content_type: 'product',
+        quantity: Number(quantity),
+        price: Number(product.price),
+      }],
+      value: Number(product.price) * Number(quantity),
+      currency: 'PKR',
+    });
+
     navigate('/checkout');
   };
 
@@ -212,7 +255,6 @@ const ProductDetail = () => {
     </div>
   </motion.div>
 
-  {/* Dot indicators — mobile only, since swiping is the primary interaction there */}
   {gallery.length > 1 && (
     <div className="flex justify-center gap-1.5 mt-3 md:hidden">
       {gallery.map((img, i) => (
@@ -242,7 +284,6 @@ const ProductDetail = () => {
     </div>
   )}
 </div>
-     
 
             {/* Info */}
             <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.4, delay: 0.1 }}>
@@ -271,7 +312,6 @@ const ProductDetail = () => {
                 {stock === 0 ? '✕ Out of stock' : stock < 10 ? `⚠ Only ${stock} left in stock` : '✓ In stock'}
               </p>
 
-              {/* Compatible models */}
               {compatibleModels?.length > 0 && (
                 <div className="mb-8">
                   <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-3">Compatible With</h3>
@@ -285,7 +325,6 @@ const ProductDetail = () => {
                 </div>
               )}
 
-              {/* Quantity + Add to cart */}
               <div className="flex items-center gap-4 mb-4">
                 <div className="flex items-center gap-3 bg-navy-800 border border-navy-700 rounded-xl2 px-2">
                   <button onClick={() => setQuantity((q) => Math.max(1, q - 1))} aria-label="Decrease quantity"
@@ -326,7 +365,6 @@ const ProductDetail = () => {
 
           <ReviewsSection productId={product.id} rating={rating} reviewCount={reviewCount} />
 
-          {/* Related products */}
           {related.length > 0 && (
             <section className="pb-20">
               <h2 className="text-2xl font-extrabold mb-8">You May Also Like</h2>
