@@ -57,6 +57,19 @@ const ProductCard = ({ id, name, price, compareAtPrice, category, rating, review
       return;
     }
     addItem({ id, name, price, category, bgGradient, imageUrl });
+
+    window.ttq?.track('AddToCart', {
+      contents: [{
+        content_id: String(id),
+        content_name: name,
+        content_type: 'product',
+        quantity: 1,
+        price: Number(price),
+      }],
+      content_type: 'product',
+      value: Number(price),
+      currency: 'PKR',
+    });
   };
 
   return (
