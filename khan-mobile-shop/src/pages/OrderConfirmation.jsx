@@ -45,7 +45,7 @@ const OrderConfirmation = () => {
 
     window.ttq.track('Purchase', {
       contents: (order.items || []).map((item) => ({
-        content_id: String(item.id),
+        content_id: String(item.productId || item.id),
         content_name: item.name,
         content_type: 'product',
         quantity: Number(item.quantity),
