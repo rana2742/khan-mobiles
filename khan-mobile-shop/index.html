@@ -1,26 +1,135 @@
-<!doctype html>
+ <!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+
+    <!-- Favicon -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+
+    <!-- Responsive viewport -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- Website title -->
     <title>Khan Mobile Shop — Premium Mobile Accessories</title>
 
+    <!-- TikTok Pixel Code Start -->
+    <script>
+      !function (w, d, t) {
+        w.TiktokAnalyticsObject = t;
+
+        var ttq = w[t] = w[t] || [];
+
+        ttq.methods = [
+          "page",
+          "track",
+          "identify",
+          "instances",
+          "debug",
+          "on",
+          "off",
+          "once",
+          "ready",
+          "alias",
+          "group",
+          "enableCookie",
+          "disableCookie",
+          "holdConsent",
+          "revokeConsent",
+          "grantConsent"
+        ];
+
+        ttq.setAndDefer = function (t, e) {
+          t[e] = function () {
+            t.push(
+              [e].concat(
+                Array.prototype.slice.call(arguments, 0)
+              )
+            );
+          };
+        };
+
+        for (var i = 0; i < ttq.methods.length; i++) {
+          ttq.setAndDefer(ttq, ttq.methods[i]);
+        }
+
+        ttq.instance = function (t) {
+          for (
+            var e = ttq._i[t] || [],
+                n = 0;
+            n < ttq.methods.length;
+            n++
+          ) {
+            ttq.setAndDefer(e, ttq.methods[n]);
+          }
+
+          return e;
+        };
+
+        ttq.load = function (e, n) {
+          var r =
+            "https://analytics.tiktok.com/i18n/pixel/events.js";
+
+          ttq._i = ttq._i || {};
+          ttq._i[e] = [];
+          ttq._i[e]._u = r;
+
+          ttq._t = ttq._t || {};
+          ttq._t[e] = +new Date;
+
+          ttq._o = ttq._o || {};
+          ttq._o[e] = n || {};
+
+          n = document.createElement("script");
+          n.type = "text/javascript";
+          n.async = !0;
+          n.src = r + "?sdkid=" + e + "&lib=" + t;
+
+          e = document.getElementsByTagName("script")[0];
+
+          e.parentNode.insertBefore(n, e);
+        };
+
+        /* Your TikTok Pixel ID */
+        ttq.load("DACMGSJC77UDHLL3EFF0");
+
+        /* Track page view */
+        ttq.page();
+
+      }(window, document, "ttq");
+    </script>
+    <!-- TikTok Pixel Code End -->
+
+
     <!--
-      Only things NOT managed per-page by <SEO> (src/components/SEO.jsx) live here:
-      title/description/canonical/og:title/og:description/og:image/twitter:title/
-      twitter:description are all set by that component on every route, so
-      duplicating them here would create two conflicting tags per page.
+      SEO information is managed per-page by:
+      src/components/SEO.jsx
+
+      Therefore, title, description, canonical,
+      og:title, og:description, og:image,
+      twitter:title and twitter:description
+      are handled by that component.
     -->
+
+    <!-- Open Graph -->
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Khan Mobile Shop" />
+
+    <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
 
     <!-- Prevent white flash on load -->
-    <style>html { background-color: #F8FAFC; }</style>
+    <style>
+      html {
+        background-color: #F8FAFC;
+      }
+    </style>
   </head>
+
   <body>
+    <!-- React application -->
     <div id="root"></div>
+
+    <!-- React/Vite entry point -->
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
