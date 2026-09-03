@@ -37,6 +37,27 @@ const OrderConfirmation = () => {
     }
   }, [order]);
 
+  useEffect(() => {
+    if (!order || !window.ttq) return;
+
+    const purchaseKey = `khan-mobile-tiktok-purchase-${order.orderId || order.orderNumber}`;
+    if (sessionStorage.getItem(purchaseKey)) return;
+
+    window.ttq.track('Purchase', {
+      contents: (order.items || []).map((item) => ({
+        content_id: String(item.id),
+        content_name: item.name,
+        content_type: 'product',
+        quantity: Number(item.quantity),
+        price: Number(item.price),
+      })),
+      value: Number(order.total),
+      currency: 'PKR',
+    });
+
+    sessionStorage.setItem(purchaseKey, '1');
+  }, [order]);
+
   if (!order) {
     return (
       <>
