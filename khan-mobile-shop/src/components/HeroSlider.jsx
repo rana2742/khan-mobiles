@@ -34,7 +34,7 @@ const HeroSlider = () => {
   const slide = SLIDES_DATA[current];
 
   return (
-    <section className="relative overflow-hidden h-[65vh] min-h-[420px] max-h-[560px] md:h-[calc(100vh-64px)] md:max-h-none md:min-h-[480px]">
+    <section className="relative overflow-hidden h-[38vh] min-h-[260px] max-h-[340px] md:h-[45vh] md:min-h-[320px] md:max-h-[420px]">
       <AnimatePresence initial={false} custom={direction} mode="wait">
         <motion.div key={current} custom={direction} variants={slideVariants}
           initial="enter" animate="center" exit="exit"
@@ -80,20 +80,15 @@ const HeroSlider = () => {
               <div className="max-w-2xl">
                 <motion.span initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.15 }}
-                  className="inline-block text-xs font-semibold tracking-widest uppercase px-3 py-1 rounded-full mb-6"
+                  className="inline-block text-xs font-semibold tracking-widest uppercase px-3 py-1 rounded-full mb-3"
                   style={{ backgroundColor: `${slide.accentColor}25`, color: slide.accentColor, border: `1px solid ${slide.accentColor}50` }}>
                   Limited Time Offer
                 </motion.span>
 
-                <motion.h1 initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.25 }}
-                  className="text-5xl md:text-7xl font-extrabold tracking-tight leading-tight mb-6 text-white">
-                  {slide.headline}
-                </motion.h1>
 
                 <motion.p initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.35 }}
-                  className="text-slate-300 text-lg md:text-xl mb-10 max-w-lg leading-relaxed">
+                  className="text-slate-300 text-lg md:text-xl mb-4 max-w-lg leading-relaxed">
                   {slide.subtext}
                 </motion.p>
 

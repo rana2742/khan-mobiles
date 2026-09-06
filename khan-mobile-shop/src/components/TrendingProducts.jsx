@@ -43,21 +43,23 @@ const TrendingProducts = () => {
             </motion.div>
           </motion.div>
 
-          {loading ? (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-              {Array.from({ length: 8 }).map((_, i) => (
-                <div key={i} className="bg-navy-800 rounded-xl2 h-72 animate-pulse" />
-              ))}
+{loading ? (
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+        {Array.from({ length: 8 }).map((_, i) => (
+          <div key={i} className="bg-navy-800 rounded-xl2 h-72 animate-pulse" />
+        ))}
+      </div>
+    ) : (
+      <div className="overflow-hidden">
+        <div className="flex gap-4 md:gap-6 w-max animate-scroll-left hover:[animation-play-state:paused]">
+          {[...products, ...products].map((product, i) => (
+            <div key={`${product.id}-${i}`} className="w-[46vw] sm:w-56 md:w-64 shrink-0">
+              <ProductCard {...product} />
             </div>
-          ) : (
- <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-  {products.map((product) => (
-    <motion.div key={product.id} variants={itemVariants}>
-      <ProductCard {...product} />
-    </motion.div>
-  ))}
-</div>
-          )}
+          ))}
+        </div>
+      </div>
+    )}
         </motion.div>
       </Container>
     </section>

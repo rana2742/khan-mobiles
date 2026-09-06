@@ -1,17 +1,7 @@
 export const SLIDES_DATA = [
+
   {
     id: 'slide-1',
-    headline: 'Power Up Faster',
-    subtext: 'Ultra-fast chargers & power banks that keep you going all day.',
-    cta: 'Shop Chargers',
-    bgImage: '/images/charger.jpg',
-    bgPosition: '80% center', // shift focus right, toward the headphones
-    accentColor: '#a855f7',
-    category: 'Chargers',
-  },
-  {
-    id: 'slide-2',
-    headline: 'Hear the Difference',
     subtext: 'Crystal-clear earphones & headphones at unbeatable prices.',
     cta: 'Shop Audio',
     bgImage: '/images/headphone.png',
@@ -20,8 +10,7 @@ export const SLIDES_DATA = [
     category: 'Earphones',
   },
   {
-    id: 'slide-3',
-    headline: 'Stay Connected',
+    id: 'slide-2',
     subtext: 'Discover stylish smartwatches with fitness tracking, heart-rate monitoring, and long-lasting battery life.',
     cta: 'Explore Watches',
     bgImage: '/images/watch.png',
@@ -30,8 +19,7 @@ export const SLIDES_DATA = [
     category: 'Smartwatches',
   },
   {
-    id: 'slide-4',
-    headline: 'True Wireless Freedom',
+    id: 'slide-3',
     subtext: 'Compact earbuds with rich sound and all-day battery life.',
     cta: 'Shop Earbuds',
     bgImage: '/images/airbuds.png',
@@ -40,34 +28,13 @@ export const SLIDES_DATA = [
     category: 'Earbuds',
   },
     {
-    id: 'slide-5',
-    headline: 'True Wireless Freedom',
+    id: 'slide-4',
     subtext: 'Compact earbuds with rich sound and all-day battery life.',
     cta: 'Shop Earbuds',
     bgImage: '/images/eirbuds2.png',
     bgPosition: '80% center', // shift focus right, toward the headphones
     accentColor: '#eab308',
     category: 'Earbuds',
-  },
-  {
-    id: 'slide-6',
-    headline: 'Never Run Out of Power',
-    subtext: 'High-capacity power banks for charging on the go.',
-    cta: 'Shop Power Banks',
-    bgImage: '/images/powerbank.jpg',
-    bgPosition: '80% center', // shift focus right, toward the headphones
-    accentColor: '#ef4444',
-    category: 'Power Banks',
-  },
-  {
-    id: 'slide-7',
-    headline: 'Protect What Matters',
-    subtext: 'Tempered glass and film protectors for every screen.',
-    cta: 'Shop Protectors',
-    bgImage: '/images/screenprotector.jpg',
-    bgPosition: '80% center', // shift focus right, toward the screen protector
-    accentColor: '#14b8a6',
-    category: 'Screen Protectors',
   },
 ]; 
 // ─── CATEGORIES_DATA ──────────────────────────────────────────────────────────
