@@ -43,7 +43,21 @@ const HeroSlider = () => {
 
           {/* Ken Burns background */}
      {/* Background Image */}
- <motion.div
+  {/* Blurred, full-bleed backdrop (fills all empty space, no visible bars) */}
+<div
+  className="absolute inset-0"
+  style={{
+    backgroundImage: `url(${slide.bgImage})`,
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+    backgroundRepeat: 'no-repeat',
+    filter: 'blur(30px) brightness(0.6)',
+    transform: 'scale(1.15)', // hides blur edge softening at the borders
+  }}
+/>
+
+{/* Sharp foreground image, fully visible, never cropped */}
+<motion.div
   key={`bg-${current}`}
   className="absolute inset-0"
   style={{
@@ -51,13 +65,11 @@ const HeroSlider = () => {
     backgroundSize: 'contain',
     backgroundPosition: 'center',
     backgroundRepeat: 'no-repeat',
-    backgroundColor: '#0f172a',
   }}
   initial={{ scale: 1 }}
   animate={{ scale: 1.02 }}
   transition={{ duration: 6, ease: 'linear' }}
 />
-
 {/* Dark Overlay */}
 <div
   className="absolute inset-0"
