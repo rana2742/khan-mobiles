@@ -2,8 +2,7 @@ export const SLIDES_DATA = [
 
   {
     id: 'slide-1',
-    subtext: 'Crystal-clear earphones & headphones at unbeatable prices.',
-    cta: 'Shop Audio',
+     cta: 'Shop Audio',
     bgImage: '/images/headphone.png',
     bgPosition: '80% center', // shift focus right, toward the headphones
     accentColor: '#22c55e',
@@ -11,7 +10,6 @@ export const SLIDES_DATA = [
   },
   {
     id: 'slide-2',
-    subtext: 'Discover stylish smartwatches with fitness tracking, heart-rate monitoring, and long-lasting battery life.',
     cta: 'Explore Watches',
     bgImage: '/images/watch.png',
     bgPosition: '20% center', // shift focus left, toward the watch
@@ -20,8 +18,7 @@ export const SLIDES_DATA = [
   },
   {
     id: 'slide-3',
-    subtext: 'Compact earbuds with rich sound and all-day battery life.',
-    cta: 'Shop Earbuds',
+     cta: 'Shop Earbuds',
     bgImage: '/images/airbuds.png',
     bgPosition: '80% center', // shift focus right, toward the headphones
     accentColor: '#eab308',
@@ -29,8 +26,7 @@ export const SLIDES_DATA = [
   },
     {
     id: 'slide-4',
-    subtext: 'Compact earbuds with rich sound and all-day battery life.',
-    cta: 'Shop Earbuds',
+     cta: 'Shop Earbuds',
     bgImage: '/images/eirbuds2.png',
     bgPosition: '80% center', // shift focus right, toward the headphones
     accentColor: '#eab308',

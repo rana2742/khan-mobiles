@@ -7,6 +7,7 @@ import TrendingProducts from '../components/TrendingProducts';
 import StatsStrip from '../components/StatsStrip';
 import NewsletterSection from '../components/NewsletterSection';
 import Footer from '../components/Footer';
+import BestSellerSlider from '../components/BestSellerSlider';
 
 const Home = () => (
   <>
@@ -18,7 +19,8 @@ const Home = () => (
     <main className="pt-16">
       <HeroSlider />
       <CategorySection />
-       <PromoStrip />
+      <PromoStrip />
+      <BestSellerSlider />
       <TrendingProducts />
       <StatsStrip />
       <NewsletterSection />

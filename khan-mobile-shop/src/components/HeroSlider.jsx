@@ -48,12 +48,13 @@ const HeroSlider = () => {
   className="absolute inset-0"
   style={{
     backgroundImage: `url(${slide.bgImage})`,
-    backgroundSize: 'cover',
-    backgroundPosition: slide.bgPosition || 'center',
+    backgroundSize: 'contain',
+    backgroundPosition: 'center',
     backgroundRepeat: 'no-repeat',
+    backgroundColor: '#0f172a',
   }}
   initial={{ scale: 1 }}
-  animate={{ scale: 1.08 }}
+  animate={{ scale: 1.02 }}
   transition={{ duration: 6, ease: 'linear' }}
 />
 
