@@ -15,6 +15,20 @@ const orderItemSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const courierSchema = new mongoose.Schema(
+  {
+    provider: { type: String, enum: ['leopards'], default: null },
+    trackingNumber: { type: String, default: null },
+    status: { type: String, default: null },
+    statusCode: { type: String, default: null },
+    statusReason: { type: String, default: null },
+    slipLink: { type: String, default: null },
+    bookedAt: { type: Date, default: null },
+    lastUpdatedAt: { type: Date, default: null },
+  },
+  { _id: false }
+);
+
 const orderSchema = new mongoose.Schema(
   {
     orderNumber: { type: String, required: true, unique: true },
@@ -37,10 +51,12 @@ const orderSchema = new mongoose.Schema(
       default: 'pending',
     },
     items: { type: [orderItemSchema], default: [] },
+    courier: { type: courierSchema, default: null },
   },
   { timestamps: { createdAt: true, updatedAt: false } }
 );
 
 orderSchema.index({ user: 1 });
+orderSchema.index({ 'courier.trackingNumber': 1 });
 
 module.exports = mongoose.model('Order', orderSchema);
