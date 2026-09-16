@@ -7,7 +7,7 @@ import Footer from '../components/Footer';
 import Container from '../components/Container';
 import Button from '../components/Button';
 
-const statusStyles = { pending: 'bg-yellow-50 text-yellow-700', processing: 'bg-blue-50 text-blue-700', shipped: 'bg-purple-50 text-purple-700', delivered: 'bg-green-50 text-green-700', cancelled: 'bg-red-50 text-red-50' };
+const statusStyles = { pending: 'bg-yellow-50 text-yellow-700', processing: 'bg-blue-50 text-blue-700', shipped: 'bg-purple-50 text-purple-700', delivered: 'bg-green-50 text-green-700', cancelled: 'bg-red-50 text-red-700' };
 const statusSteps = ['pending', 'processing', 'shipped', 'delivered'];
 
 const StarPicker = ({ value, onChange }) => <div className="flex items-center gap-1">{[1, 2, 3, 4, 5].map((s) => <button key={s} type="button" onClick={() => onChange(s)} aria-label={`Rate ${s} stars`}><svg width="26" height="26" viewBox="0 0 24 24" fill={s <= value ? '#f59e0b' : '#E2E8F0'} stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg></button>)}</div>;
