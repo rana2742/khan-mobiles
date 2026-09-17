@@ -97,10 +97,10 @@ const getCities = async () => {
 
     const baseWithoutApi = BASE_URL.replace(/\/api$/, '');
     const candidates = [
-      [`merchantapi-without-api`, `${baseWithoutApi}/getAllCities/format/json/`],
-      [`merchantapi-no-trailing-format-slash`, `${BASE_URL}/getAllCities/format/json`],
-      [`adminapi-with-api`, `https://adminapi.leopardscourier.com/api/getAllCities/format/json/`],
-      [`adminapi-without-api`, `https://adminapi.leopardscourier.com/getAllCities/format/json/`],
+      ['merchantapi-without-api', `${baseWithoutApi}/getAllCities/format/json/`],
+      ['merchantapi-no-trailing-format-slash', `${BASE_URL}/getAllCities/format/json`],
+      ['adminapi-with-api', `https://adminapi.leopardscourier.com/api/getAllCities/format/json/`],
+      ['adminapi-without-api', `https://adminapi.leopardscourier.com/getAllCities/format/json/`],
     ];
 
     console.warn('Leopards getAllCities returned 404; probing alternate documented-style URLs.');
@@ -127,56 +127,8 @@ const resolveDestinationCityId = async (cityName) => {
   throw Object.assign(new Error(`Leopards does not have a matching destination city for "${cityName}". Choose a city supported by Leopards.`), { statusCode: 400 });
 };
 
-const bookPacket = async ({ order, weightGrams, pieces = 1, specialInstructions }) => {
-  const destinationCity = await resolveDestinationCityId(order.city);
-  const originCity = process.env.LEOPARDS_ORIGIN_CITY_ID
-    ? Number(process.env.LEOPARDS_ORIGIN_CITY_ID)
-    : 'self';
-  const weight = Number(weightGrams || process.env.LEOPARDS_DEFAULT_WEIGHT_GRAMS || 500);
-  const noPieces = Number(pieces || process.env.LEOPARDS_DEFAULT_PIECES || 1);
-  if (!Number.isFinite(weight) || weight <= 0) throw Object.assign(new Error('Shipment weight must be greater than zero.'), { statusCode: 400 });
-  if (!Number.isInteger(noPieces) || noPieces <= 0) throw Object.assign(new Error('Shipment pieces must be a positive integer.'), { statusCode: 400 });
-
-  const payload = {
-    booked_packet_order_id: order.orderNumber,
-    booked_packet_weight: Math.round(weight),
-    booked_packet_no_piece: noPieces,
-    booked_packet_collect_amount: order.paymentMethod === 'cod' ? Math.round(Number(order.total)) : 0,
-    origin_city: originCity,
-    destination_city: destinationCity,
-    shipment_name_eng: 'self',
-    shipment_email: 'self',
-    shipment_phone: 'self',
-    shipment_address: 'self',
-    consignment_name_eng: order.fullName,
-    consignment_email: order.email || '',
-    consignment_phone: order.phone,
-    consignment_phone_two: '',
-    consignment_phone_three: '',
-    consignment_address: [order.address, order.landmark].filter(Boolean).join(' - '),
-    special_instructions: specialInstructions || `Khan Mobile Shop order ${order.orderNumber}`,
-    shipment_type: process.env.LEOPARDS_SHIPMENT_TYPE || 'overnight',
-    return_city: process.env.LEOPARDS_RETURN_CITY_ID ? Number(process.env.LEOPARDS_RETURN_CITY_ID) : '',
-    return_address: process.env.LEOPARDS_RETURN_ADDRESS || '',
-    custom_data: [],
-  };
-
-  if (process.env.LEOPARDS_SHIPMENT_ID) {
-    const shipmentId = Number(process.env.LEOPARDS_SHIPMENT_ID);
-    if (!Number.isInteger(shipmentId) || shipmentId <= 0) {
-      const err = new Error('LEOPARDS_SHIPMENT_ID must be a positive integer when configured.');
-      err.statusCode = 503;
-      throw err;
-    }
-    payload.shipment_id = shipmentId;
-  }
-
-  return request('bookPacket', payload);
-};
-
 // Safe, non-booking diagnostic. It only sends OPTIONS requests, so it cannot
-// create a shipment or consume a CN. It helps identify which route shape the
-// Leopards account exposes without changing the live booking URL.
+// create a shipment or consume a CN.
 const probeBookingEndpoints = async () => {
   const baseWithoutApi = BASE_URL.replace(/\/api$/, '');
   const candidates = [
@@ -190,24 +142,55 @@ const probeBookingEndpoints = async () => {
   const results = [];
   for (const [label, url] of candidates) {
     try {
-      const response = await fetch(url, {
-        method: 'OPTIONS',
-        headers: { Accept: 'application/json' },
-      });
-      results.push({
-        label,
-        url,
-        status: response.status,
-        allow: response.headers.get('allow') || null,
-        contentType: response.headers.get('content-type') || 'unknown',
-      });
+      const response = await fetch(url, { method: 'OPTIONS', headers: { Accept: 'application/json' } });
+      results.push({ label, url, status: response.status, allow: response.headers.get('allow') || null, contentType: response.headers.get('content-type') || 'unknown' });
     } catch (error) {
       results.push({ label, url, error: error.message });
     }
   }
-
   console.log('Leopards booking endpoint diagnostic (no booking performed)', results);
   return results;
+};
+
+const bookPacket = async ({ order, weightGrams, pieces = 1, specialInstructions }) => {
+  const destinationCity = await resolveDestinationCityId(order.city);
+  const originCity = process.env.LEOPARDS_ORIGIN_CITY_ID ? Number(process.env.LEOPARDS_ORIGIN_CITY_ID) : 'self';
+  const weight = Number(weightGrams || process.env.LEOPARDS_DEFAULT_WEIGHT_GRAMS || 500);
+  const noPieces = Number(pieces || process.env.LEOPARDS_DEFAULT_PIECES || 1);
+  if (!Number.isFinite(weight) || weight <= 0) throw Object.assign(new Error('Shipment weight must be greater than zero.'), { statusCode: 400 });
+  if (!Number.isInteger(noPieces) || noPieces <= 0) throw Object.assign(new Error('Shipment pieces must be a positive integer.'), { statusCode: 400 });
+
+  const payload = {
+    booked_packet_order_id: order.orderNumber,
+    booked_packet_weight: Math.round(weight),
+    booked_packet_no_piece: noPieces,
+    booked_packet_collect_amount: order.paymentMethod === 'cod' ? Math.round(Number(order.total)) : 0,
+    origin_city: originCity,
+    destination_city: destinationCity,
+    shipment_name_eng: 'self', shipment_email: 'self', shipment_phone: 'self', shipment_address: 'self',
+    consignment_name_eng: order.fullName, consignment_email: order.email || '', consignment_phone: order.phone,
+    consignment_phone_two: '', consignment_phone_three: '',
+    consignment_address: [order.address, order.landmark].filter(Boolean).join(' - '),
+    special_instructions: specialInstructions || `Khan Mobile Shop order ${order.orderNumber}`,
+    shipment_type: process.env.LEOPARDS_SHIPMENT_TYPE || 'overnight',
+    return_city: process.env.LEOPARDS_RETURN_CITY_ID ? Number(process.env.LEOPARDS_RETURN_CITY_ID) : '',
+    return_address: process.env.LEOPARDS_RETURN_ADDRESS || '', custom_data: [],
+  };
+
+  if (process.env.LEOPARDS_SHIPMENT_ID) {
+    const shipmentId = Number(process.env.LEOPARDS_SHIPMENT_ID);
+    if (!Number.isInteger(shipmentId) || shipmentId <= 0) throw Object.assign(new Error('LEOPARDS_SHIPMENT_ID must be a positive integer when configured.'), { statusCode: 503 });
+    payload.shipment_id = shipmentId;
+  }
+
+  try {
+    return await request('bookPacket', payload);
+  } catch (error) {
+    // A 404 is a route problem, not a booking validation error. Probe safely
+    // before returning the original error. No booking payload is sent again.
+    if (error?.leopards?.status === 404) await probeBookingEndpoints();
+    throw error;
+  }
 };
 
 const trackPacket = async (trackNumber) => request('trackBookedPacket', { track_numbers: trackNumber });
