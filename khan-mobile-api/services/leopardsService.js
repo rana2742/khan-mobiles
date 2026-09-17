@@ -12,7 +12,8 @@ const getCredentials = () => {
 };
 
 const request = async (endpoint, body) => {
-  const response = await fetch(`${BASE_URL}${endpoint}/format/json/`, {
+  const requestUrl = `${BASE_URL}${endpoint}/format/json/`;
+  const response = await fetch(requestUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
     body: JSON.stringify({ ...getCredentials(), ...body }),
@@ -23,8 +24,24 @@ const request = async (endpoint, body) => {
   try {
     data = JSON.parse(text);
   } catch {
-    const err = new Error(`Leopards returned a non-JSON response (${response.status}).`);
+    const contentType = response.headers.get('content-type') || 'unknown';
+    const bodyPreview = text.replace(/\s+/g, ' ').trim().slice(0, 300);
+    console.error('Leopards API non-JSON response', {
+      endpoint,
+      url: requestUrl,
+      status: response.status,
+      contentType,
+      bodyPreview,
+    });
+
+    const err = new Error(`Leopards returned a non-JSON response (${response.status}) from ${endpoint}.`);
     err.statusCode = 502;
+    err.leopards = {
+      endpoint,
+      status: response.status,
+      contentType,
+      bodyPreview,
+    };
     throw err;
   }
 
