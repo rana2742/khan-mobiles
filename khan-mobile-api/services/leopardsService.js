@@ -63,13 +63,6 @@ const resolveDestinationCityId = async (cityName) => {
 };
 
 const bookPacket = async ({ order, weightGrams, pieces = 1, specialInstructions }) => {
-  const shipmentId = Number(process.env.LEOPARDS_SHIPMENT_ID);
-  if (!Number.isInteger(shipmentId) || shipmentId <= 0) {
-    const err = new Error('Leopards shipment ID is not configured. Set LEOPARDS_SHIPMENT_ID on the server.');
-    err.statusCode = 503;
-    throw err;
-  }
-
   const destinationCity = await resolveDestinationCityId(order.city);
   const originCity = process.env.LEOPARDS_ORIGIN_CITY_ID
     ? Number(process.env.LEOPARDS_ORIGIN_CITY_ID)
@@ -79,14 +72,13 @@ const bookPacket = async ({ order, weightGrams, pieces = 1, specialInstructions 
   if (!Number.isFinite(weight) || weight <= 0) throw Object.assign(new Error('Shipment weight must be greater than zero.'), { statusCode: 400 });
   if (!Number.isInteger(noPieces) || noPieces <= 0) throw Object.assign(new Error('Shipment pieces must be a positive integer.'), { statusCode: 400 });
 
-  return request('bookPacket', {
+  const payload = {
     booked_packet_order_id: order.orderNumber,
     booked_packet_weight: Math.round(weight),
     booked_packet_no_piece: noPieces,
     booked_packet_collect_amount: order.paymentMethod === 'cod' ? Math.round(Number(order.total)) : 0,
     origin_city: originCity,
     destination_city: destinationCity,
-    shipment_id: shipmentId,
     shipment_name_eng: 'self',
     shipment_email: 'self',
     shipment_phone: 'self',
@@ -101,7 +93,22 @@ const bookPacket = async ({ order, weightGrams, pieces = 1, specialInstructions 
     shipment_type: process.env.LEOPARDS_SHIPMENT_TYPE || 'overnight',
     return_city: process.env.LEOPARDS_RETURN_CITY_ID ? Number(process.env.LEOPARDS_RETURN_CITY_ID) : '',
     return_address: process.env.LEOPARDS_RETURN_ADDRESS || '',
-  });
+    custom_data: [],
+  };
+
+  // Some Leopards merchant accounts expose a shipment ID while others do not.
+  // Only send it when the merchant has actually been given one.
+  if (process.env.LEOPARDS_SHIPMENT_ID) {
+    const shipmentId = Number(process.env.LEOPARDS_SHIPMENT_ID);
+    if (!Number.isInteger(shipmentId) || shipmentId <= 0) {
+      const err = new Error('LEOPARDS_SHIPMENT_ID must be a positive integer when configured.');
+      err.statusCode = 503;
+      throw err;
+    }
+    payload.shipment_id = shipmentId;
+  }
+
+  return request('bookPacket', payload);
 };
 
 const trackPacket = async (trackNumber) => request('trackBookedPacket', { track_numbers: trackNumber });
