@@ -35,7 +35,11 @@ const parseResponse = async (response, requestUrl, endpoint) => {
 };
 
 const request = async (endpoint, body) => {
-  const requestUrl = `${BASE_URL}${endpoint}/format/json/`;
+  // BASE_URL is normalized without a trailing slash, so the separator must
+  // be added here. The previous code produced /apibookPacket instead of
+  // /api/bookPacket, which caused Leopards to return nginx 404.
+  const requestUrl = `${BASE_URL}/${String(endpoint).replace(/^\/+/, '')}/format/json/`;
+  console.log('Leopards API request', { endpoint, url: requestUrl });
   const response = await fetch(requestUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
@@ -124,7 +128,7 @@ const resolveDestinationCityId = async (cityName) => {
     return (name.includes(wanted) || wanted.includes(name)) && city.allow_as_destination !== false;
   });
   if (partial) return partial.id;
-  throw Object.assign(new Error(`Leopards does not have a matching destination city for "${cityName}". Choose a city supported by Leopards.`), { statusCode: 400 });
+  throw Object.assign(new Error(`Leopards does not have a matching destination city for \"${cityName}\". Choose a city supported by Leopards.`), { statusCode: 400 });
 };
 
 // Safe, non-booking diagnostic. It only sends OPTIONS requests, so it cannot
