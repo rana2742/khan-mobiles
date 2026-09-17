@@ -11,14 +11,7 @@ const getCredentials = () => {
   return { api_key: apiKey, api_password: apiPassword };
 };
 
-const request = async (endpoint, body) => {
-  const requestUrl = `${BASE_URL}${endpoint}/format/json/`;
-  const response = await fetch(requestUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify({ ...getCredentials(), ...body }),
-  });
-
+const parseResponse = async (response, requestUrl, endpoint) => {
   const text = await response.text();
   let data;
   try {
@@ -33,17 +26,22 @@ const request = async (endpoint, body) => {
       contentType,
       bodyPreview,
     });
-
     const err = new Error(`Leopards returned a non-JSON response (${response.status}) from ${endpoint}.`);
     err.statusCode = 502;
-    err.leopards = {
-      endpoint,
-      status: response.status,
-      contentType,
-      bodyPreview,
-    };
+    err.leopards = { endpoint, status: response.status, contentType, bodyPreview };
     throw err;
   }
+  return { data, text };
+};
+
+const request = async (endpoint, body) => {
+  const requestUrl = `${BASE_URL}${endpoint}/format/json/`;
+  const response = await fetch(requestUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ ...getCredentials(), ...body }),
+  });
+  const { data } = await parseResponse(response, requestUrl, endpoint);
 
   if (!response.ok || Number(data?.status) !== 1) {
     const message = typeof data?.error === 'string'
@@ -54,15 +52,65 @@ const request = async (endpoint, body) => {
     err.leopards = data;
     throw err;
   }
-
   return data;
+};
+
+const requestCitiesAt = async (requestUrl, label) => {
+  try {
+    const response = await fetch(requestUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(getCredentials()),
+    });
+    const { data } = await parseResponse(response, requestUrl, label);
+    const success = response.ok && Number(data?.status) === 1 && Array.isArray(data?.city_list);
+    console.log('Leopards city endpoint probe', {
+      label,
+      url: requestUrl,
+      status: response.status,
+      contentType: response.headers.get('content-type') || 'unknown',
+      jsonStatus: data?.status ?? null,
+      cityCount: Array.isArray(data?.city_list) ? data.city_list.length : 0,
+      success,
+    });
+    if (success) return data;
+    return null;
+  } catch (error) {
+    console.error('Leopards city endpoint probe failed', {
+      label,
+      url: requestUrl,
+      message: error.message,
+      status: error.leopards?.status ?? error.statusCode ?? null,
+    });
+    return null;
+  }
 };
 
 const normalizeCity = (value) => String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
 
 const getCities = async () => {
-  const data = await request('getAllCities', {});
-  return Array.isArray(data.city_list) ? data.city_list : [];
+  try {
+    const data = await request('getAllCities', {});
+    return Array.isArray(data.city_list) ? data.city_list : [];
+  } catch (error) {
+    if (error?.leopards?.status !== 404) throw error;
+
+    const baseWithoutApi = BASE_URL.replace(/\/api$/, '');
+    const candidates = [
+      [`merchantapi-without-api`, `${baseWithoutApi}/getAllCities/format/json/`],
+      [`merchantapi-no-trailing-format-slash`, `${BASE_URL}/getAllCities/format/json`],
+      [`adminapi-with-api`, `https://adminapi.leopardscourier.com/api/getAllCities/format/json/`],
+      [`adminapi-without-api`, `https://adminapi.leopardscourier.com/getAllCities/format/json/`],
+    ];
+
+    console.warn('Leopards getAllCities returned 404; probing alternate documented-style URLs.');
+    for (const [label, url] of candidates) {
+      const data = await requestCitiesAt(url, label);
+      if (data) return data.city_list;
+    }
+
+    throw error;
+  }
 };
 
 const resolveDestinationCityId = async (cityName) => {
@@ -113,8 +161,6 @@ const bookPacket = async ({ order, weightGrams, pieces = 1, specialInstructions 
     custom_data: [],
   };
 
-  // Some Leopards merchant accounts expose a shipment ID while others do not.
-  // Only send it when the merchant has actually been given one.
   if (process.env.LEOPARDS_SHIPMENT_ID) {
     const shipmentId = Number(process.env.LEOPARDS_SHIPMENT_ID);
     if (!Number.isInteger(shipmentId) || shipmentId <= 0) {
@@ -129,7 +175,6 @@ const bookPacket = async ({ order, weightGrams, pieces = 1, specialInstructions 
 };
 
 const trackPacket = async (trackNumber) => request('trackBookedPacket', { track_numbers: trackNumber });
-
 const cancelPacket = async (trackNumber) => request('cancelBookedPackets', { cn_numbers: trackNumber });
 
 module.exports = { bookPacket, trackPacket, cancelPacket, getCities };
