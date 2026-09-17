@@ -31,7 +31,7 @@ exports.track = async (req, res) => {
   if (!order.courier?.trackingNumber) return res.status(409).json({ success: false, message: 'This order has not been booked with Leopards yet.' });
   const data = await trackPacket(order.courier.trackingNumber);
   const packet = data.packet_list?.[0];
-  if (packet) { order.courier.status = packet.booked_packet_status || order.courier.status; order.courier.lastUpdatedAt = new Date(); await order.save(); }
+  if (packet) { order.courier.status = packet.booked_packet_status || order.courier.status; order.courier.statusCode = packet.booked_packet_status_code || order.courier.statusCode; order.courier.lastUpdatedAt = new Date(); await order.save(); }
   res.json({ success: true, courier: order.courier, tracking: packet || null });
 };
 
@@ -44,8 +44,9 @@ exports.cancel = async (req, res) => {
 };
 
 exports.webhook = async (req, res) => {
-  const expected = process.env.LEOPARDS_PUSH_SECRET;
-  if (expected && req.get('x-leopards-secret') !== expected) return res.status(401).json([{ status: 0, errors: ['Unauthorized'] }]);
+  // The Push API documentation specifies a POST payload but does not specify
+  // a fixed custom authentication header name. Do not require an invented
+  // header here; configure a documented header only if Leopards provides one.
   const rows = Array.isArray(req.body?.data) ? req.body.data : [];
   for (const row of rows) {
     if (!row?.cn_number) continue;
@@ -57,7 +58,7 @@ exports.webhook = async (req, res) => {
     order.courier.lastUpdatedAt = row.activity_date ? new Date(row.activity_date) : new Date();
     const code = String(row.status || '').toUpperCase();
     if (code === 'DV') order.status = 'delivered';
-    else if (['RS', 'RW', 'RO', 'RN1', 'RN2', 'NR'].includes(code)) order.status = 'cancelled';
+    else if (code === 'RS') order.status = 'cancelled';
     else if (['RC', 'AC', 'PN1', 'PN2', 'AR', 'DP', 'SP'].includes(code)) order.status = 'shipped';
     await order.save();
   }
