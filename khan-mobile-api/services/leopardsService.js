@@ -174,7 +174,43 @@ const bookPacket = async ({ order, weightGrams, pieces = 1, specialInstructions 
   return request('bookPacket', payload);
 };
 
+// Safe, non-booking diagnostic. It only sends OPTIONS requests, so it cannot
+// create a shipment or consume a CN. It helps identify which route shape the
+// Leopards account exposes without changing the live booking URL.
+const probeBookingEndpoints = async () => {
+  const baseWithoutApi = BASE_URL.replace(/\/api$/, '');
+  const candidates = [
+    ['current', `${BASE_URL}/bookPacket/format/json/`],
+    ['current-no-trailing-slash', `${BASE_URL}/bookPacket/format/json`],
+    ['merchantapi-without-api', `${baseWithoutApi}/bookPacket/format/json/`],
+    ['temu-before-bookPacket', `${BASE_URL}/temu/bookPacket/format/json/`],
+    ['temu-after-bookPacket', `${BASE_URL}/bookPacket/temu/format/json/`],
+  ];
+
+  const results = [];
+  for (const [label, url] of candidates) {
+    try {
+      const response = await fetch(url, {
+        method: 'OPTIONS',
+        headers: { Accept: 'application/json' },
+      });
+      results.push({
+        label,
+        url,
+        status: response.status,
+        allow: response.headers.get('allow') || null,
+        contentType: response.headers.get('content-type') || 'unknown',
+      });
+    } catch (error) {
+      results.push({ label, url, error: error.message });
+    }
+  }
+
+  console.log('Leopards booking endpoint diagnostic (no booking performed)', results);
+  return results;
+};
+
 const trackPacket = async (trackNumber) => request('trackBookedPacket', { track_numbers: trackNumber });
 const cancelPacket = async (trackNumber) => request('cancelBookedPackets', { cn_numbers: trackNumber });
 
-module.exports = { bookPacket, trackPacket, cancelPacket, getCities };
+module.exports = { bookPacket, trackPacket, cancelPacket, getCities, probeBookingEndpoints };
