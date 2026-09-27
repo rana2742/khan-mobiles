@@ -11,6 +11,7 @@ import Container from '../components/Container';
 import Button from '../components/Button';
 import Badge from '../components/Badge';
 import ProductCard from '../components/ProductCard';
+import { trackViewContent, trackAddToCart, trackInitiateCheckout } from '../services/metaPixel';
 
 const badgeVariantMap = { New: 'accent', Hot: 'warning', Sale: 'warning', Bestseller: 'success' };
 
@@ -113,7 +114,11 @@ const ProductDetail = () => {
   useEffect(() => { loadProduct(); window.scrollTo(0, 0); }, [loadProduct]);
 
   useEffect(() => {
-    if (!product || !window.ttq) return;
+    if (!product) return;
+
+    trackViewContent(product);
+
+    if (!window.ttq) return;
 
     window.ttq.track('ViewContent', {
       contents: [{
@@ -174,6 +179,8 @@ const ProductDetail = () => {
     setAdded(true);
     setTimeout(() => setAdded(false), 2000);
 
+    trackAddToCart(product, quantity);
+
     window.ttq?.track('AddToCart', {
       contents: [{
         content_id: String(product.id),
@@ -191,6 +198,8 @@ const ProductDetail = () => {
   const handleBuyNow = () => {
     if (!isAuthenticated) return requireLogin();
     addItem(product, quantity);
+
+    trackInitiateCheckout([product], Number(product.price) * Number(quantity));
 
     window.ttq?.track('InitiateCheckout', {
       contents: [{

@@ -7,6 +7,7 @@ import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import Container from '../components/Container';
 import Button from '../components/Button';
+import { trackInitiateCheckout } from '../services/metaPixel';
 
 const CITIES = ['Lahore', 'Karachi', 'Islamabad', 'Rawalpindi', 'Faisalabad', 'Multan', 'Peshawar', 'Quetta'];
 
@@ -34,7 +35,11 @@ const emptyForm = {
   }, [user]);
 
   useEffect(() => {
-    if (!items.length || !window.ttq) return;
+    if (!items.length) return;
+
+    trackInitiateCheckout(items, Number(total));
+
+    if (!window.ttq) return;
 
     window.ttq.track('InitiateCheckout', {
       contents: items.map((item) => ({

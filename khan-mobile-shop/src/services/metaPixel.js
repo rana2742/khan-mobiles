@@ -2,11 +2,6 @@ const META_PIXEL_ID = '819668267751439';
 
 const isReady = () => typeof window !== 'undefined' && typeof window.fbq === 'function';
 
-export const trackPageView = () => {
-  if (!isReady()) return;
-  window.fbq('track', 'PageView');
-};
-
 export const trackViewContent = (product) => {
   if (!isReady() || !product) return;
   window.fbq('track', 'ViewContent', {
@@ -54,46 +49,5 @@ export const trackPurchase = (order) => {
   });
 };
 
-// Mirror TikTok ecommerce events to Meta, except Purchase.
-// Purchase is fired explicitly by OrderConfirmation so it has one dedicated
-// Meta source and cannot be duplicated by the TikTok→Meta bridge.
-const bridgeExistingTikTokEvents = () => {
-  if (typeof window === 'undefined' || !window.ttq || !isReady() || window.__khanMetaTikTokBridgeInstalled) return;
-
-  const originalTrack = window.ttq.track?.bind(window.ttq);
-  if (!originalTrack) return;
-
-  window.ttq.track = (eventName, data = {}) => {
-    originalTrack(eventName, data);
-    if (!isReady()) return;
-
-    const contents = Array.isArray(data.contents) ? data.contents : [];
-    const metaContents = contents.map((item) => ({
-      id: String(item.content_id || item.id),
-      quantity: Number(item.quantity || 1),
-      item_price: Number(item.price ?? item.item_price ?? 0),
-    }));
-
-    const metaData = {
-      content_ids: metaContents.map((item) => item.id),
-      contents: metaContents,
-      content_type: 'product',
-      value: Number(data.value || 0),
-      currency: data.currency || 'PKR',
-    };
-
-    if (eventName === 'ViewContent' || eventName === 'AddToCart') {
-      metaData.content_name = contents[0]?.content_name;
-      window.fbq('track', eventName, metaData);
-    } else if (eventName === 'InitiateCheckout') {
-      metaData.num_items = metaContents.reduce((sum, item) => sum + item.quantity, 0);
-      window.fbq('track', eventName, metaData);
-    }
-  };
-
-  window.__khanMetaTikTokBridgeInstalled = true;
-};
-
-bridgeExistingTikTokEvents();
 
 export { META_PIXEL_ID };
