@@ -23,6 +23,8 @@
       s.parentNode.insertBefore(t,s)}(window, document,'script',
       'https://connect.facebook.net/en_US/fbevents.js');
 
+      /* Disable Meta Pixel automatic configuration so UI button clicks (including the newsletter Subscribe button) are not auto-tracked. */
+      fbq('set', 'autoConfig', false, '819668267751439');
       fbq('init', '819668267751439');
       fbq('track', 'PageView');
     </script>

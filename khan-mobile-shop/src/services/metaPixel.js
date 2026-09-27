@@ -54,9 +54,9 @@ export const trackPurchase = (order) => {
   });
 };
 
-// The shop already fires TikTok ecommerce events in ProductDetail, ProductCard,
-// Checkout and OrderConfirmation. Mirror those same events to Meta so the two
-// pixels stay aligned without duplicating ecommerce logic in every component.
+// Mirror TikTok ecommerce events to Meta, except Purchase.
+// Purchase is fired explicitly by OrderConfirmation so it has one dedicated
+// Meta source and cannot be duplicated by the TikTok→Meta bridge.
 const bridgeExistingTikTokEvents = () => {
   if (typeof window === 'undefined' || !window.ttq || !isReady() || window.__khanMetaTikTokBridgeInstalled) return;
 
@@ -85,7 +85,7 @@ const bridgeExistingTikTokEvents = () => {
     if (eventName === 'ViewContent' || eventName === 'AddToCart') {
       metaData.content_name = contents[0]?.content_name;
       window.fbq('track', eventName, metaData);
-    } else if (eventName === 'InitiateCheckout' || eventName === 'Purchase') {
+    } else if (eventName === 'InitiateCheckout') {
       metaData.num_items = metaContents.reduce((sum, item) => sum + item.quantity, 0);
       window.fbq('track', eventName, metaData);
     }

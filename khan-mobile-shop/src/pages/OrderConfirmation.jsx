@@ -6,6 +6,7 @@ import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import Container from '../components/Container';
 import Button from '../components/Button';
+import { trackPurchase } from '../services/metaPixel';
 
 const OrderConfirmation = () => {
   const location = useLocation();
@@ -38,12 +39,17 @@ const OrderConfirmation = () => {
   }, [order]);
 
   useEffect(() => {
-    if (!order || !window.ttq) return;
+    if (!order) return;
 
-    const purchaseKey = `khan-mobile-tiktok-purchase-${order.orderId || order.orderNumber}`;
+    const purchaseKey = `khan-mobile-purchase-${order.orderId || order.orderNumber}`;
     if (sessionStorage.getItem(purchaseKey)) return;
 
-    window.ttq.track('Purchase', {
+    // Fire Meta Purchase explicitly after the order is successfully created.
+    // This keeps Purchase independent from the TikTok→Meta bridge and ensures
+    // the Meta Pixel receives the conversion exactly once per order.
+    trackPurchase(order);
+
+    if (window.ttq) window.ttq.track('Purchase', {
       contents: (order.items || []).map((item) => ({
         content_id: String(item.productId || item.id),
         content_name: item.name,
