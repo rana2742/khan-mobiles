@@ -4,8 +4,8 @@ import PropTypes from 'prop-types';
 const CartContext = createContext(null);
 
 const STORAGE_KEY = 'khan-mobile-cart';
-const FREE_DELIVERY_THRESHOLD = 2000;
-const DELIVERY_FEE = 150;
+const FREE_DELIVERY_THRESHOLD = 0;
+const DELIVERY_FEE = 0;
 const PROMO_CODES = {
   KHAN10: 0.10,
 };
@@ -111,8 +111,8 @@ export const CartProvider = ({ children }) => {
   );
 
   const deliveryFee = useMemo(
-    () => (subtotal - discount >= FREE_DELIVERY_THRESHOLD || subtotal === 0 ? 0 : DELIVERY_FEE),
-    [subtotal, discount]
+    () => DELIVERY_FEE,
+    []
   );
 
   const total = useMemo(
