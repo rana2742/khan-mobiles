@@ -6,7 +6,7 @@ import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import Container from '../components/Container';
 import Button from '../components/Button';
-import { trackTikTokPurchase } from '../services/metaPixel';
+import { trackTikTokPurchase, trackMetaPurchase } from '../services/metaPixel';
 
 const OrderConfirmation = () => {
   const location = useLocation();
@@ -43,8 +43,9 @@ const OrderConfirmation = () => {
 
     const purchaseKey = `khan-mobile-purchase-${order.orderId || order.orderNumber}`;
     if (sessionStorage.getItem(purchaseKey)) return;
-    trackTikTokPurchase(order);
 
+    trackTikTokPurchase(order);
+    trackMetaPurchase(order);
     sessionStorage.setItem(purchaseKey, '1');
   }, [order]);
 

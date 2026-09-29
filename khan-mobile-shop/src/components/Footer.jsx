@@ -1,12 +1,13 @@
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import Container from './Container';
+import { trackMetaContact } from '../services/metaPixel';
 
 const QUICK_LINKS = [
-  { label: 'Home',       to: '/' },
-  { label: 'Shop',       to: '/shop' },
-  { label: 'About',      to: '/about' },
-  { label: 'Contact',    to: '/contact' },
+  { label: 'Home', to: '/' },
+  { label: 'Shop', to: '/shop' },
+  { label: 'About', to: '/about' },
+  { label: 'Contact', to: '/contact' },
 ];
 
 const CATEGORY_LINKS = ['Earbuds','Chargers','Earphones','Power Banks','Screen Protectors','Smartwatches'];
@@ -24,15 +25,15 @@ const SOCIALS = [
       <circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/>
     </svg>
   )},
- {
-  label: 'TikTok',
-  href: 'https://www.tiktok.com/@khan.mobile345?_r=1&_t=ZS-989i23fJpoH', // Replace with your TikTok profile
-  icon: (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-      <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25h-3.13v13.23a2.8 2.8 0 1 1-2.8-2.8c.31 0 .61.05.89.14V9.84a5.93 5.93 0 0 0-.89-.07A5.93 5.93 0 1 0 15.82 15V8.28a7.92 7.92 0 0 0 4.64 1.49V6.69h-.87z"/>
-    </svg>
-  ),
-},
+  {
+    label: 'TikTok',
+    href: 'https://www.tiktok.com/@khan.mobile345?_r=1&_t=ZS-989i23fJpoH',
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25h-3.13v13.23a2.8 2.8 0 1 1-2.8-2.8c.31 0 .61.05.89.14V9.84a5.93 5.93 0 0 0-.89-.07A5.93 5.93 0 1 0 15.82 15V8.28a7.92 7.92 0 0 0 4.64 1.49V6.69h-.87z"/>
+      </svg>
+    ),
+  },
 ];
 
 const FooterLink = ({ to, children }) => (
@@ -47,8 +48,6 @@ const Footer = () => (
   <footer className="bg-slate-900 border-t border-slate-800">
     <Container>
       <div className="py-12 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-10">
-
-        {/* Brand */}
         <div className="flex flex-col gap-5">
           <Link to="/" className="flex items-center gap-1 w-fit">
             <span className="text-xl font-extrabold text-white">Khan</span>
@@ -68,7 +67,6 @@ const Footer = () => (
           </div>
         </div>
 
-        {/* Quick Links */}
         <div>
           <h3 className="text-sm font-bold text-white uppercase tracking-widest mb-5">Quick Links</h3>
           <div className="flex flex-col gap-1">
@@ -76,7 +74,6 @@ const Footer = () => (
           </div>
         </div>
 
-        {/* Categories */}
         <div>
           <h3 className="text-sm font-bold text-white uppercase tracking-widest mb-5">Categories</h3>
           <div className="flex flex-col gap-1">
@@ -86,14 +83,24 @@ const Footer = () => (
           </div>
         </div>
 
-        {/* Contact */}
         <div>
           <h3 className="text-sm font-bold text-white uppercase tracking-widest mb-5">Contact Us</h3>
           <div className="flex flex-col gap-3 text-sm text-slate-400">
             <p className="flex items-start gap-2"><span>📍</span><span>Industrial Estate Near UBL Bank, Multan</span></p>
             <p className="flex items-center gap-2"><span>📞</span>
-              <a href="tel:+92 3166953535" className="hover:text-accent transition-colors">+92 316 695 3534</a>
+              <a href="tel:+923166953535" className="hover:text-accent transition-colors">+92 316 695 3534</a>
             </p>
+            <a
+              href="https://wa.me/923166953535"
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => trackMetaContact('whatsapp-footer')}
+              className="inline-flex items-center justify-center gap-2 rounded-xl2 bg-green-600 hover:bg-green-700 text-white font-semibold px-4 py-3 transition-colors w-fit"
+              aria-label="Contact us on WhatsApp"
+            >
+              <span aria-hidden="true">💬</span>
+              <span>WhatsApp</span>
+            </a>
             <p className="flex items-center gap-2"><span>🕐</span><span> Open Daily: 08am – 10pm</span></p>
           </div>
         </div>
@@ -104,7 +111,7 @@ const Footer = () => (
       <Container>
         <div className="py-4 flex flex-col sm:flex-row items-center justify-between gap-2">
           <p className="text-slate-500 text-xs">© 2026 Khan Mobile Shop. All rights reserved.</p>
-                <p className="text-slate-600 text-xs">
+          <p className="text-slate-600 text-xs">
             Designed & Developed by{" "}
             <a
               href="https://github.com/rana2742"

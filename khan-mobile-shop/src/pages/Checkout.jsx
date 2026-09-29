@@ -7,7 +7,7 @@ import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import Container from '../components/Container';
 import Button from '../components/Button';
-import { trackTikTokInitiateCheckout } from '../services/metaPixel';
+import { trackTikTokInitiateCheckout, trackMetaInitiateCheckout } from '../services/metaPixel';
 
 const CITIES = ['Lahore', 'Karachi', 'Islamabad', 'Rawalpindi', 'Faisalabad', 'Multan', 'Peshawar', 'Quetta'];
 
@@ -16,7 +16,7 @@ const emptyForm = {
   paymentMethod: 'cod',
 };
 
- const Checkout = () => {
+const Checkout = () => {
   const { items, subtotal, discount, deliveryFee, total, promo, clearCart } = useCart();
   const { user, resendVerification, refreshUser } = useAuth();
   const [form, setForm] = useState(emptyForm);
@@ -37,8 +37,14 @@ const emptyForm = {
 
   useEffect(() => {
     if (!items.length) return;
+
     trackTikTokInitiateCheckout(items, Number(total));
-  }, [items, total]);
+
+    // Fire exactly once for this checkout session, even if cart state
+    // re-renders or changes while the checkout form is being completed.
+    const checkoutId = `checkout-${idempotencyKey}`;
+    trackMetaInitiateCheckout(items, Number(total), checkoutId);
+  }, [items, total, idempotencyKey]);
 
   const handleResendVerification = async () => {
     setResending(true);

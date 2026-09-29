@@ -11,7 +11,7 @@ import Container from '../components/Container';
 import Button from '../components/Button';
 import Badge from '../components/Badge';
 import ProductCard from '../components/ProductCard';
-import { trackTikTokViewContent, trackTikTokAddToCart, trackTikTokInitiateCheckout } from '../services/metaPixel';
+import { trackTikTokViewContent, trackTikTokAddToCart, trackTikTokInitiateCheckout, trackMetaViewContent, trackMetaAddToCart } from '../services/metaPixel';
 
 const badgeVariantMap = { New: 'accent', Hot: 'warning', Sale: 'warning', Bestseller: 'success' };
 
@@ -32,18 +32,22 @@ const ReviewsSection = ({ productId, rating, reviewCount }) => {
 
   useEffect(() => {
     api.get(`/api/reviews/product/${productId}`)
-      .then((data) => setReviews(data.reviews))
+      .then((data) => setReviews(Array.isArray(data?.reviews) ? data.reviews : []))
+      .catch(() => setReviews([]))
       .finally(() => setLoading(false));
   }, [productId]);
+
+  const safeRating = Number(rating) || 0;
+  const safeReviewCount = Number(reviewCount) || 0;
 
   return (
     <section className="pb-20 border-t border-navy-700 pt-12">
       <div className="flex items-center gap-4 mb-8">
         <h2 className="text-2xl font-extrabold">Customer Reviews</h2>
-        {reviewCount > 0 && (
+        {safeReviewCount > 0 && (
           <div className="flex items-center gap-2">
-            <StarRating rating={rating} size={18} />
-            <span className="text-sm text-slate-500">{rating.toFixed(1)} · {reviewCount} review{reviewCount !== 1 ? 's' : ''}</span>
+            <StarRating rating={safeRating} size={18} />
+            <span className="text-sm text-slate-500">{safeRating.toFixed(1)} · {safeReviewCount} review{safeReviewCount !== 1 ? 's' : ''}</span>
           </div>
         )}
       </div>
@@ -100,10 +104,37 @@ const ProductDetail = () => {
     setNotFound(false);
     try {
       const data = await api.get(`/api/products/${id}`);
-      setProduct(data.product);
+      const productData = data?.product || data;
+      if (!productData || typeof productData !== 'object' || !productData.id) {
+        throw new Error('Invalid product response');
+      }
+
+      const normalizedProduct = {
+        ...productData,
+        name: String(productData.name || 'Product'),
+        price: Number.isFinite(Number(productData.price)) ? Number(productData.price) : 0,
+        compareAtPrice: productData.compareAtPrice == null ? null : Number(productData.compareAtPrice),
+        category: String(productData.category || ''),
+        brand: String(productData.brand || ''),
+        rating: Number.isFinite(Number(productData.rating)) ? Number(productData.rating) : 0,
+        reviewCount: Number.isFinite(Number(productData.reviewCount)) ? Number(productData.reviewCount) : 0,
+        stock: Number.isFinite(Number(productData.stock)) ? Number(productData.stock) : 0,
+        images: Array.isArray(productData.images) ? productData.images.filter((img) => img?.url) : [],
+        compatibleModels: Array.isArray(productData.compatibleModels) ? productData.compatibleModels : [],
+      };
+
+      setProduct(normalizedProduct);
       setActiveImageIndex(0);
-      const relatedData = await api.get(`/api/products?category=${encodeURIComponent(data.product.category)}&limit=5`);
-      setRelated(relatedData.products.filter((p) => p.id !== data.product.id).slice(0, 4));
+
+      if (normalizedProduct.category) {
+        try {
+          const relatedData = await api.get(`/api/products?category=${encodeURIComponent(normalizedProduct.category)}&limit=5`);
+          const relatedProducts = Array.isArray(relatedData?.products) ? relatedData.products : [];
+          setRelated(relatedProducts.filter((p) => p.id !== normalizedProduct.id).slice(0, 4));
+        } catch {
+          setRelated([]);
+        }
+      }
     } catch {
       setNotFound(true);
     } finally {
@@ -115,7 +146,8 @@ const ProductDetail = () => {
 
   useEffect(() => {
     if (!product) return;
-    trackTikTokViewContent(product);
+    try { trackTikTokViewContent(product); } catch { /* tracking must never break rendering */ }
+    try { trackMetaViewContent(product); } catch { /* Meta tracking must never break rendering */ }
   }, [product]);
 
   if (loading) {
@@ -148,10 +180,15 @@ const ProductDetail = () => {
   }
 
   const { name, price, compareAtPrice, category, brand, rating, reviewCount, badge, bgGradient, imageUrl, images, compatibleModels, description, stock } = product;
+  const safePrice = Number(price) || 0;
+  const safeCompareAtPrice = Number(compareAtPrice) || 0;
+  const safeRating = Number(rating) || 0;
+  const safeReviewCount = Number(reviewCount) || 0;
+  const safeStock = Math.max(0, Number(stock) || 0);
   const gallery = images && images.length > 0 ? images : (imageUrl ? [{ id: 'primary', url: imageUrl }] : []);
   const activeImage = gallery[activeImageIndex]?.url || imageUrl;
-  const onSale = compareAtPrice && compareAtPrice > price;
-  const discountPct = onSale ? Math.round(((compareAtPrice - price) / compareAtPrice) * 100) : 0;
+  const onSale = safeCompareAtPrice > safePrice;
+  const discountPct = onSale ? Math.round(((safeCompareAtPrice - safePrice) / safeCompareAtPrice) * 100) : 0;
 
   const requireLogin = () => {
     navigate(`/login?redirect=${encodeURIComponent(location.pathname)}`);
@@ -159,17 +196,31 @@ const ProductDetail = () => {
 
   const handleAddToCart = () => {
     if (!isAuthenticated) return requireLogin();
+
     addItem(product, quantity);
     setAdded(true);
     setTimeout(() => setAdded(false), 2000);
+
     trackTikTokAddToCart(product, quantity);
+
+    // Meta AddToCart fires only from this actual "Add to Cart" action.
+    // The action id is created once per click, so accidental duplicate
+    // handler invocations with the same id are deduplicated by the manager.
+    let actionId;
+    try {
+      actionId = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    } catch {
+      actionId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    }
+    trackMetaAddToCart(product, quantity, actionId);
   };
 
   const handleBuyNow = () => {
     if (!isAuthenticated) return requireLogin();
     addItem(product, quantity);
     trackTikTokInitiateCheckout([product], Number(product.price) * Number(quantity));
-
     navigate('/checkout');
   };
 
@@ -177,14 +228,13 @@ const ProductDetail = () => {
     <>
       <SEO
         title={name}
-        description={description || `${name} by ${brand} — Rs. ${price.toLocaleString('en-PK')}. Available now at Khan Mobile Shop with fast delivery across Pakistan.`}
+        description={description || `${name} by ${brand} — Rs. ${safePrice.toLocaleString('en-PK')}. Available now at Khan Mobile Shop with fast delivery across Pakistan.`}
         path={`/product/${product.id}`}
         image={activeImage}
       />
       <Navbar />
       <main className="pt-16 min-h-screen">
         <Container>
-          {/* Breadcrumb */}
           <nav className="py-6 text-sm text-slate-500 flex items-center gap-2 flex-wrap">
             <Link to="/" className="hover:text-accent transition-colors">Home</Link>
             <span>/</span>
@@ -196,63 +246,61 @@ const ProductDetail = () => {
           </nav>
 
           <div className="grid md:grid-cols-2 gap-10 lg:gap-16 pb-16">
-         {/* Image gallery */}
-<div>
-  <motion.div
-    key={activeImage}
-    drag={gallery.length > 1 ? 'x' : false}
-    dragConstraints={{ left: 0, right: 0 }}
-    dragElastic={0.2}
-    onDragEnd={(e, info) => {
-      const threshold = 50;
-      if (info.offset.x < -threshold && activeImageIndex < gallery.length - 1) {
-        setActiveImageIndex((i) => i + 1);
-      } else if (info.offset.x > threshold && activeImageIndex > 0) {
-        setActiveImageIndex((i) => i - 1);
-      }
-    }}
-    initial={{ opacity: 0.6 }} animate={{ opacity: 1 }} transition={{ duration: 0.25 }}
-    className={`relative rounded-xl3 overflow-hidden h-80 md:h-[28rem] bg-cover bg-center ${gallery.length > 1 ? 'touch-pan-y cursor-grab active:cursor-grabbing' : ''}`}
-    style={activeImage ? { backgroundImage: `url(${activeImage})` } : { background: bgGradient }}
-  >
-    <div className="absolute top-5 left-5 flex flex-col gap-2 items-start">
-      {badge && <Badge variant={badgeVariantMap[badge] || 'accent'}>{badge}</Badge>}
-      {onSale && <Badge variant="warning">-{discountPct}% OFF</Badge>}
-    </div>
-  </motion.div>
+            <div>
+              <motion.div
+                key={activeImage}
+                drag={gallery.length > 1 ? 'x' : false}
+                dragConstraints={{ left: 0, right: 0 }}
+                dragElastic={0.2}
+                onDragEnd={(e, info) => {
+                  const threshold = 50;
+                  if (info.offset.x < -threshold && activeImageIndex < gallery.length - 1) {
+                    setActiveImageIndex((i) => i + 1);
+                  } else if (info.offset.x > threshold && activeImageIndex > 0) {
+                    setActiveImageIndex((i) => i - 1);
+                  }
+                }}
+                initial={{ opacity: 0.6 }} animate={{ opacity: 1 }} transition={{ duration: 0.25 }}
+                className={`relative rounded-xl3 overflow-hidden h-80 md:h-[28rem] bg-cover bg-center ${gallery.length > 1 ? 'touch-pan-y cursor-grab active:cursor-grabbing' : ''}`}
+                style={activeImage ? { backgroundImage: `url(${activeImage})` } : { background: bgGradient }}
+              >
+                <div className="absolute top-5 left-5 flex flex-col gap-2 items-start">
+                  {badge && <Badge variant={badgeVariantMap[badge] || 'accent'}>{badge}</Badge>}
+                  {onSale && <Badge variant="warning">-{discountPct}% OFF</Badge>}
+                </div>
+              </motion.div>
 
-  {gallery.length > 1 && (
-    <div className="flex justify-center gap-1.5 mt-3 md:hidden">
-      {gallery.map((img, i) => (
-        <button
-          key={img.id}
-          onClick={() => setActiveImageIndex(i)}
-          aria-label={`Go to image ${i + 1}`}
-          className={`h-1.5 rounded-full transition-all ${i === activeImageIndex ? 'w-6 bg-accent' : 'w-1.5 bg-navy-700'}`}
-        />
-      ))}
-    </div>
-  )}
+              {gallery.length > 1 && (
+                <div className="flex justify-center gap-1.5 mt-3 md:hidden">
+                  {gallery.map((img, i) => (
+                    <button
+                      key={img.id}
+                      onClick={() => setActiveImageIndex(i)}
+                      aria-label={`Go to image ${i + 1}`}
+                      className={`h-1.5 rounded-full transition-all ${i === activeImageIndex ? 'w-6 bg-accent' : 'w-1.5 bg-navy-700'}`}
+                    />
+                  ))}
+                </div>
+              )}
 
-  {gallery.length > 1 && (
-    <div className="flex gap-3 mt-4 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
-      {gallery.map((img, i) => (
-        <button
-          key={img.id}
-          onClick={() => setActiveImageIndex(i)}
-          aria-label={`View image ${i + 1}`}
-          className={`w-16 h-16 rounded-xl2 overflow-hidden bg-cover bg-center border-2 transition-colors shrink-0 ${
-            i === activeImageIndex ? 'border-accent' : 'border-transparent opacity-70 hover:opacity-100'
-          }`}
-          style={{ backgroundImage: `url(${img.url})` }}
-        />
-      ))}
-    </div>
-  )}
-</div>
+              {gallery.length > 1 && (
+                <div className="flex gap-3 mt-4 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+                  {gallery.map((img, i) => (
+                    <button
+                      key={img.id}
+                      onClick={() => setActiveImageIndex(i)}
+                      aria-label={`View image ${i + 1}`}
+                      className={`w-16 h-16 rounded-xl2 overflow-hidden bg-cover bg-center border-2 transition-colors shrink-0 ${
+                        i === activeImageIndex ? 'border-accent' : 'border-transparent opacity-70 hover:opacity-100'
+                      }`}
+                      style={{ backgroundImage: `url(${img.url})` }}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
 
-            {/* Info */}
-            <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.4, delay: 0.1 }}>
+            <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1 }} transition={{ duration: 0.4, delay: 0.1 }}>
               <span className="text-xs font-semibold tracking-widest uppercase text-accent mb-3 block">{brand}</span>
               <h1 className="text-3xl md:text-4xl font-extrabold mb-4">{name}</h1>
 
@@ -266,7 +314,7 @@ const ProductDetail = () => {
               <div className="flex items-baseline gap-3 mb-6">
                 <p className="text-3xl font-extrabold text-slate-900">Rs. {price.toLocaleString('en-PK')}</p>
                 {onSale && (
-                  <p className="text-lg text-slate-400 line-through">Rs. {compareAtPrice.toLocaleString('en-PK')}</p>
+                  <p className="text-lg text-slate-400 line-through">Rs. {safeCompareAtPrice.toLocaleString('en-PK')}</p>
                 )}
               </div>
 
@@ -274,7 +322,7 @@ const ProductDetail = () => {
                 {description || `The ${name} from ${brand} combines premium build quality with everyday reliability.`}
               </p>
 
-              <p className={`text-sm font-medium mb-8 ${stock === 0 ? 'text-red-600' : stock < 10 ? 'text-orange-600' : 'text-green-600'}`}>
+              <p className={`text-sm font-medium mb-8 ${safeStock === 0 ? 'text-red-600' : safeStock < 10 ? 'text-orange-600' : 'text-green-600'}`}>
                 {stock === 0 ? '✕ Out of stock' : stock < 10 ? `⚠ Only ${stock} left in stock` : '✓ In stock'}
               </p>
 
@@ -296,7 +344,7 @@ const ProductDetail = () => {
                   <button onClick={() => setQuantity((q) => Math.max(1, q - 1))} aria-label="Decrease quantity"
                     className="w-9 h-9 flex items-center justify-center text-slate-600 hover:text-slate-900 text-lg">−</button>
                   <span className="w-6 text-center text-slate-900 font-semibold">{quantity}</span>
-                  <button onClick={() => setQuantity((q) => Math.min(stock, q + 1))} aria-label="Increase quantity"
+                  <button onClick={() => setQuantity((q) => Math.min(safeStock, q + 1))} aria-label="Increase quantity"
                     className="w-9 h-9 flex items-center justify-center text-slate-600 hover:text-slate-900 text-lg">+</button>
                 </div>
                 <Button size="lg" className="flex-1" onClick={handleAddToCart} disabled={stock === 0}>
@@ -329,7 +377,7 @@ const ProductDetail = () => {
             </motion.div>
           </div>
 
-          <ReviewsSection productId={product.id} rating={rating} reviewCount={reviewCount} />
+          <ReviewsSection productId={product.id} rating={rating} reviewCount={safeReviewCount} />
 
           {related.length > 0 && (
             <section className="pb-20">
