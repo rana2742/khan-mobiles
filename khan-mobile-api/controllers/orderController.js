@@ -17,48 +17,189 @@ const courierPayload = (courier) => courier ? {
   lastUpdatedAt: courier.lastUpdatedAt,
 } : null;
 
+const roundMoney = (value) => Math.round((Number(value) + Number.EPSILON) * 100) / 100;
+
 exports.create = async (req, res) => {
   const {
-    items, subtotal, discount = 0, deliveryFee = 0, total,
-    promoCode, fullName, email, phone, address, landmark, city, paymentMethod = 'cod',
+    items, promoCode, fullName, email, phone, address, landmark, city,
+    paymentMethod = 'cod', idempotencyKey,
   } = req.body;
 
-  if (!Array.isArray(items) || items.length === 0) return res.status(400).json({ success: false, message: 'Your cart is empty.' });
-  if (!req.user.emailVerified) return res.status(403).json({ success: false, message: 'Please verify your email address before placing an order.', code: 'EMAIL_NOT_VERIFIED' });
-  if (!fullName?.trim() || !email?.trim() || !phone?.trim() || !address?.trim() || !city?.trim()) return res.status(400).json({ success: false, message: 'All delivery details are required.' });
+  if (!Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ success: false, message: 'Your cart is empty.' });
+  }
+  if (!req.user.emailVerified) {
+    return res.status(403).json({ success: false, message: 'Please verify your email address before placing an order.', code: 'EMAIL_NOT_VERIFIED' });
+  }
+  if (!fullName?.trim() || !email?.trim() || !phone?.trim() || !address?.trim() || !city?.trim()) {
+    return res.status(400).json({ success: false, message: 'All delivery details are required.' });
+  }
+  if (paymentMethod !== 'cod') {
+    return res.status(400).json({ success: false, message: 'Only Cash on Delivery is currently available.' });
+  }
+  if (idempotencyKey && (typeof idempotencyKey !== 'string' || idempotencyKey.length > 100)) {
+    return res.status(400).json({ success: false, message: 'Invalid order request key.' });
+  }
+
+  // A retry of the same checkout submission returns the existing order instead
+  // of reserving stock and creating a second order.
+  if (idempotencyKey) {
+    const existing = await Order.findOne({ idempotencyKey, user: req.user._id });
+    if (existing) {
+      return res.status(200).json({
+        success: true,
+        duplicate: true,
+        order: {
+          orderId: existing._id.toString(),
+          orderNumber: existing.orderNumber,
+          subtotal: Number(existing.subtotal),
+          discount: Number(existing.discount),
+          deliveryFee: Number(existing.deliveryFee),
+          total: Number(existing.total),
+          items: existing.items.map((i) => ({
+            productId: i.product?.toString() || null,
+            name: i.name,
+            price: Number(i.price),
+            quantity: i.quantity,
+            imageUrl: i.imageUrl,
+          })),
+          fullName: existing.fullName,
+          email: existing.email,
+          placedAt: existing.createdAt.toISOString(),
+        },
+      });
+    }
+  }
 
   const session = await mongoose.startSession();
   try {
     let orderDoc;
     await session.withTransaction(async () => {
       const orderItems = [];
+      let subtotal = 0;
+
       for (const item of items) {
         const productId = item.productId || item.id;
-        if (!productId) continue;
+        const quantity = Number(item.quantity);
+
+        if (!productId || !mongoose.isValidObjectId(productId)) {
+          throw Object.assign(new Error('One of the products in your cart is invalid.'), { statusCode: 400 });
+        }
+        if (!Number.isInteger(quantity) || quantity < 1 || quantity > 100) {
+          throw Object.assign(new Error('Product quantity must be a whole number between 1 and 100.'), { statusCode: 400 });
+        }
+
+        // Price, name and image are always read from MongoDB. Never trust the
+        // browser's price/subtotal/discount/total values.
         const updated = await Product.findOneAndUpdate(
-          { _id: productId, isActive: true, stock: { $gte: item.quantity } },
-          { $inc: { stock: -item.quantity } }, { new: true, session }
+          { _id: productId, isActive: true, stock: { $gte: quantity } },
+          { $inc: { stock: -quantity } },
+          { new: true, session }
         );
+
         if (!updated) {
           const product = await Product.findById(productId).session(session);
-          if (!product || !product.isActive) throw Object.assign(new Error(`"${item.name}" is no longer available.`), { statusCode: 409 });
-          throw Object.assign(new Error(product.stock === 0 ? `"${product.name}" just sold out.` : `Only ${product.stock} left of "${product.name}" — please update your cart.`), { statusCode: 409 });
+          if (!product || !product.isActive) {
+            throw Object.assign(new Error('This product is no longer available.'), { statusCode: 409 });
+          }
+          throw Object.assign(
+            new Error(product.stock === 0 ? `"${product.name}" just sold out.` : `Only ${product.stock} left of "${product.name}" — please update your cart.`),
+            { statusCode: 409 }
+          );
         }
-        orderItems.push({ product: productId, name: item.name, price: item.price, quantity: item.quantity, imageUrl: item.imageUrl || null });
+
+        const linePrice = roundMoney(updated.price);
+        subtotal = roundMoney(subtotal + linePrice * quantity);
+        orderItems.push({
+          product: updated._id,
+          name: updated.name,
+          price: linePrice,
+          quantity,
+          imageUrl: updated.imageUrl || updated.images?.[0]?.url || null,
+        });
       }
-      const orderNumber = generateOrderNumber();
-      const [created] = await Order.create([{
-        orderNumber, user: req.user._id, subtotal, discount, deliveryFee, total,
-        promoCode: promoCode || null, fullName: fullName.trim(), email: email.trim(), phone: phone.trim(),
-        address: address.trim(), landmark: landmark?.trim() || null, city: city.trim(), paymentMethod, items: orderItems,
-      }], { session });
+
+      const normalizedPromo = typeof promoCode === 'string' ? promoCode.trim().toUpperCase() : null;
+      const discount = normalizedPromo === 'KHAN10' ? roundMoney(subtotal * 0.10) : 0;
+      const deliveryFee = 0;
+      const total = Math.max(roundMoney(subtotal - discount), 0);
+
+      const orderData = {
+        orderNumber: generateOrderNumber(),
+        idempotencyKey: idempotencyKey || undefined,
+        user: req.user._id,
+        subtotal,
+        discount,
+        deliveryFee,
+        total,
+        promoCode: discount > 0 ? normalizedPromo : null,
+        fullName: fullName.trim(),
+        email: email.trim().toLowerCase(),
+        phone: phone.trim(),
+        address: address.trim(),
+        landmark: landmark?.trim() || null,
+        city: city.trim(),
+        paymentMethod: 'cod',
+        items: orderItems,
+      };
+
+      const [created] = await Order.create([orderData], { session });
       orderDoc = created;
     });
 
-    const orderPayload = { orderId: orderDoc._id.toString(), orderNumber: orderDoc.orderNumber, subtotal, discount, deliveryFee, total, items, fullName, email, placedAt: orderDoc.createdAt.toISOString() };
+    const orderPayload = {
+      orderId: orderDoc._id.toString(),
+      orderNumber: orderDoc.orderNumber,
+      subtotal: Number(orderDoc.subtotal),
+      discount: Number(orderDoc.discount),
+      deliveryFee: Number(orderDoc.deliveryFee),
+      total: Number(orderDoc.total),
+      items: orderDoc.items.map((i) => ({
+        productId: i.product?.toString() || null,
+        name: i.name,
+        price: Number(i.price),
+        quantity: i.quantity,
+        imageUrl: i.imageUrl,
+      })),
+      fullName: orderDoc.fullName,
+      email: orderDoc.email,
+      placedAt: orderDoc.createdAt.toISOString(),
+    };
+
     sendOrderConfirmationEmail(orderPayload).catch(() => {});
     res.status(201).json({ success: true, order: orderPayload });
-  } finally { session.endSession(); }
+  } catch (err) {
+    if (err?.code === 11000 && idempotencyKey) {
+      const existing = await Order.findOne({ idempotencyKey, user: req.user._id });
+      if (existing) {
+        return res.status(200).json({
+          success: true,
+          duplicate: true,
+          order: {
+            orderId: existing._id.toString(),
+            orderNumber: existing.orderNumber,
+            subtotal: Number(existing.subtotal),
+            discount: Number(existing.discount),
+            deliveryFee: Number(existing.deliveryFee),
+            total: Number(existing.total),
+            items: existing.items.map((i) => ({
+              productId: i.product?.toString() || null,
+              name: i.name,
+              price: Number(i.price),
+              quantity: Number(i.quantity),
+              imageUrl: i.imageUrl,
+            })),
+            fullName: existing.fullName,
+            email: existing.email,
+            placedAt: existing.createdAt.toISOString(),
+          },
+        });
+      }
+    }
+    throw err;
+  } finally {
+    await session.endSession();
+  }
 };
 
 exports.myOrders = async (req, res) => {
@@ -83,7 +224,7 @@ exports.cancelMine = async (req, res) => {
       for (const item of order.items) if (item.product) await Product.updateOne({ _id: item.product }, { $inc: { stock: item.quantity } }, { session });
     });
     res.json({ success: true, message: 'Order cancelled.' });
-  } finally { session.endSession(); }
+  } finally { await session.endSession(); }
 };
 
 exports.listAll = async (req, res) => {
@@ -119,29 +260,14 @@ exports.downloadInvoice = async (req, res) => {
   const order = await Order.findById(req.params.id);
   if (!order) return res.status(404).json({ success: false, message: 'Order not found.' });
   if (order.user.toString() !== req.user._id.toString() && req.user.role !== 'admin') return res.status(403).json({ success: false, message: 'You can only download your own invoices.' });
-  streamInvoice({ orderNumber: order.orderNumber, status: order.status, createdAt: order.createdAt, fullName: order.fullName, email: order.email, phone: order.phone, address: order.address, landmark: order.landmark, city: order.city, paymentMethod: order.paymentMethod, subtotal: Number(order.subtotal), discount: Number(order.discount), deliveryFee: Number(order.deliveryFee), total: Number(order.total), promoCode: order.promoCode, items: order.items.map((i) => ({ name: i.name, price: Number(i.price), quantity: i.quantity })) }, res);
+  streamInvoice({ orderNumber: order.orderNumber, status: order.status, createdAt: order.createdAt, fullName: order.fullName, email: order.email, phone: order.phone, address: order.address, landmark: order.landmark, city: order.city, paymentMethod: order.paymentMethod, subtotal: Number(order.subtotal), discount: Number(order.discount), deliveryFee: Number(order.deliveryFee), total: Number(order.total), promoCode: order.promoCode, items: order.items.map((i) => ({ name: i.name, price: Number(i.price), quantity: Number(i.quantity) })) }, res);
 };
 
 exports.deleteOrder = async (req, res) => {
   const order = await Order.findById(req.params.id);
   if (!order) return res.status(404).json({ success: false, message: 'Order not found.' });
-
-  if (order.courier?.trackingNumber) {
-    return res.status(409).json({
-      success: false,
-      message: 'This order has a Leopards tracking number. Cancel the shipment before deleting the order.',
-    });
-  }
-
-  // Restore reserved stock only if it was not already restored by cancellation.
-  if (order.status !== 'cancelled') {
-    for (const item of order.items) {
-      if (item.product) {
-        await Product.updateOne({ _id: item.product }, { $inc: { stock: item.quantity } });
-      }
-    }
-  }
-
+  if (order.courier?.trackingNumber) return res.status(409).json({ success: false, message: 'This order has a Leopards tracking number. Cancel the shipment before deleting the order.' });
+  if (order.status !== 'cancelled') for (const item of order.items) if (item.product) await Product.updateOne({ _id: item.product }, { $inc: { stock: item.quantity } });
   await Order.deleteOne({ _id: order._id });
   res.json({ success: true, message: 'Order deleted.' });
 };

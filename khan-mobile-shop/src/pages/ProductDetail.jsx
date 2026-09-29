@@ -11,7 +11,7 @@ import Container from '../components/Container';
 import Button from '../components/Button';
 import Badge from '../components/Badge';
 import ProductCard from '../components/ProductCard';
-import { trackViewContent, trackAddToCart, trackInitiateCheckout } from '../services/metaPixel';
+import { trackTikTokViewContent, trackTikTokAddToCart, trackTikTokInitiateCheckout } from '../services/metaPixel';
 
 const badgeVariantMap = { New: 'accent', Hot: 'warning', Sale: 'warning', Bestseller: 'success' };
 
@@ -115,23 +115,7 @@ const ProductDetail = () => {
 
   useEffect(() => {
     if (!product) return;
-
-    trackViewContent(product);
-
-    if (!window.ttq) return;
-
-    window.ttq.track('ViewContent', {
-      contents: [{
-        content_id: String(product.id),
-        content_name: product.name,
-        content_type: 'product',
-        quantity: 1,
-        price: Number(product.price),
-      }],
-      content_type: 'product',
-      value: Number(product.price),
-      currency: 'PKR',
-    });
+    trackTikTokViewContent(product);
   }, [product]);
 
   if (loading) {
@@ -178,40 +162,13 @@ const ProductDetail = () => {
     addItem(product, quantity);
     setAdded(true);
     setTimeout(() => setAdded(false), 2000);
-
-    trackAddToCart(product, quantity);
-
-    window.ttq?.track('AddToCart', {
-      contents: [{
-        content_id: String(product.id),
-        content_name: product.name,
-        content_type: 'product',
-        quantity: Number(quantity),
-        price: Number(product.price),
-      }],
-      content_type: 'product',
-      value: Number(product.price) * Number(quantity),
-      currency: 'PKR',
-    });
+    trackTikTokAddToCart(product, quantity);
   };
 
   const handleBuyNow = () => {
     if (!isAuthenticated) return requireLogin();
     addItem(product, quantity);
-
-    trackInitiateCheckout([product], Number(product.price) * Number(quantity));
-
-    window.ttq?.track('InitiateCheckout', {
-      contents: [{
-        content_id: String(product.id),
-        content_name: product.name,
-        content_type: 'product',
-        quantity: Number(quantity),
-        price: Number(product.price),
-      }],
-      value: Number(product.price) * Number(quantity),
-      currency: 'PKR',
-    });
+    trackTikTokInitiateCheckout([product], Number(product.price) * Number(quantity));
 
     navigate('/checkout');
   };
@@ -339,7 +296,7 @@ const ProductDetail = () => {
                   <button onClick={() => setQuantity((q) => Math.max(1, q - 1))} aria-label="Decrease quantity"
                     className="w-9 h-9 flex items-center justify-center text-slate-600 hover:text-slate-900 text-lg">−</button>
                   <span className="w-6 text-center text-slate-900 font-semibold">{quantity}</span>
-                  <button onClick={() => setQuantity((q) => q + 1)} aria-label="Increase quantity"
+                  <button onClick={() => setQuantity((q) => Math.min(stock, q + 1))} aria-label="Increase quantity"
                     className="w-9 h-9 flex items-center justify-center text-slate-600 hover:text-slate-900 text-lg">+</button>
                 </div>
                 <Button size="lg" className="flex-1" onClick={handleAddToCart} disabled={stock === 0}>

@@ -1,15 +1,11 @@
 const mongoose = require('mongoose');
 
-// Line items are embedded (equivalent to the old order_items table) — an
-// order's items are always read together with the order, and embedding
-// preserves what was ordered/priced at checkout time even if the product
-// is later changed or deleted.
 const orderItemSchema = new mongoose.Schema(
   {
     product: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', default: null },
     name: { type: String, required: true },
-    price: { type: Number, required: true },
-    quantity: { type: Number, required: true },
+    price: { type: Number, required: true, min: 0 },
+    quantity: { type: Number, required: true, min: 1, max: 100 },
     imageUrl: { type: String, default: null },
   },
   { _id: false }
@@ -32,19 +28,20 @@ const courierSchema = new mongoose.Schema(
 const orderSchema = new mongoose.Schema(
   {
     orderNumber: { type: String, required: true, unique: true },
+    idempotencyKey: { type: String, default: null, unique: true, sparse: true, maxlength: 100 },
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    subtotal: { type: Number, required: true },
-    discount: { type: Number, default: 0 },
-    deliveryFee: { type: Number, default: 0 },
-    total: { type: Number, required: true },
+    subtotal: { type: Number, required: true, min: 0 },
+    discount: { type: Number, default: 0, min: 0 },
+    deliveryFee: { type: Number, default: 0, min: 0 },
+    total: { type: Number, required: true, min: 0 },
     promoCode: { type: String, default: null },
-    fullName: { type: String, required: true },
-    email: { type: String, required: true },
-    phone: { type: String, required: true },
-    address: { type: String, required: true },
-    landmark: { type: String, default: null },
-    city: { type: String, required: true },
-    paymentMethod: { type: String, default: 'cod' },
+    fullName: { type: String, required: true, trim: true },
+    email: { type: String, required: true, trim: true },
+    phone: { type: String, required: true, trim: true },
+    address: { type: String, required: true, trim: true },
+    landmark: { type: String, default: null, trim: true },
+    city: { type: String, required: true, trim: true },
+    paymentMethod: { type: String, enum: ['cod'], default: 'cod' },
     status: {
       type: String,
       enum: ['pending', 'processing', 'shipped', 'delivered', 'cancelled'],

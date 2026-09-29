@@ -5,7 +5,6 @@ import Badge from './Badge';
 import Button from './Button';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
-import { trackAddToCart } from '../services/metaPixel';
 
 const StarRating = ({ rating, reviewCount }) => (
   <div className="flex items-center gap-1">
@@ -58,9 +57,6 @@ const ProductCard = ({ id, name, price, compareAtPrice, category, rating, review
       return;
     }
     addItem({ id, name, price, category, bgGradient, imageUrl });
-
-    trackAddToCart({ id, name, price, category }, 1);
-
     window.ttq?.track('AddToCart', {
       contents: [{
         content_id: String(id),
