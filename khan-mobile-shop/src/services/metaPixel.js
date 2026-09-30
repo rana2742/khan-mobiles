@@ -28,9 +28,96 @@ const ENABLED_META_EVENTS = new Set([
 const DEDUPE_TTL_MS = 5000;
 const sentEvents = new Map();
 
+const readCookie = (name) => {
+  if (typeof document === 'undefined') return null;
+  const prefix = `${name}=`;
+  const match = document.cookie.split('; ').find((part) => part.startsWith(prefix));
+  return match ? decodeURIComponent(match.slice(prefix.length)) : null;
+};
+
+const rememberFbcFromUrl = () => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const fbclid = new URLSearchParams(window.location.search).get('fbclid');
+    if (!fbclid) return null;
+    const fbc = `fb.1.${Date.now()}.${fbclid}`;
+    window.localStorage.setItem('khan-meta-fbc', fbc);
+    return fbc;
+  } catch {
+    return null;
+  }
+};
+
+// Capture the Meta click ID as soon as the app loads, before SPA navigation
+// removes fbclid from the address bar.
+rememberFbcFromUrl();
+
+export const getMetaTrackingContext = () => {
+  if (typeof window === 'undefined') return { fbp: null, fbc: null, eventSourceUrl: null };
+
+  try {
+    const fbc = readCookie('_fbc')
+      || rememberFbcFromUrl()
+      || window.localStorage.getItem('khan-meta-fbc')
+      || null;
+    const fbp = readCookie('_fbp') || window.localStorage.getItem('khan-meta-fbp') || null;
+
+    if (fbp) window.localStorage.setItem('khan-meta-fbp', fbp);
+
+    return {
+      fbp,
+      fbc,
+      eventSourceUrl: window.location.href,
+    };
+  } catch {
+    return { fbp: null, fbc: null, eventSourceUrl: window.location.href };
+  }
+};
+
 const isMetaReady = () =>
   typeof window !== 'undefined' &&
   typeof window.fbq === 'function';
+
+const normalizeAdvancedEmail = (value) => String(value || '').trim().toLowerCase();
+const normalizeAdvancedName = (value) => String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+const normalizeAdvancedPhone = (value) => {
+  let digits = String(value || '').replace(/\D/g, '');
+  if (digits.startsWith('00')) digits = digits.slice(2);
+  if (digits.startsWith('0')) digits = '92' + digits.slice(1);
+  if (!digits.startsWith('92') && digits.length <= 10) digits = '92' + digits;
+  return digits;
+};
+
+const buildAdvancedMatching = (customer = {}) => {
+  const fullName = normalizeAdvancedName(customer.fullName || customer.name);
+  const nameParts = fullName.split(' ').filter(Boolean);
+  const data = {};
+  const email = normalizeAdvancedEmail(customer.email);
+  const phone = normalizeAdvancedPhone(customer.phone);
+  const firstName = normalizeAdvancedName(customer.firstName || nameParts[0] || '');
+  const lastName = normalizeAdvancedName(customer.lastName || nameParts.slice(1).join(' '));
+  const city = normalizeAdvancedName(customer.city);
+  if (email) data.em = email;
+  if (phone) data.ph = phone;
+  if (firstName) data.fn = firstName;
+  if (lastName) data.ln = lastName;
+  if (city) data.ct = city;
+  data.country = 'pk';
+  return data;
+};
+
+export const initializeMetaPixel = (customer = {}) => {
+  if (typeof window === 'undefined' || typeof window.fbq !== 'function') return false;
+  try {
+    const advancedMatching = buildAdvancedMatching(customer);
+    window.fbq('init', META_PIXEL_ID, advancedMatching);
+    window.__KHAN_META_PIXEL_INITIALIZED = true;
+    window.__KHAN_META_PIXEL_ADVANCED_MATCHING = advancedMatching;
+    return true;
+  } catch {
+    return false;
+  }
+};
 
 const toMetaMoney = (value) => {
   const amount = typeof value === 'string'
@@ -135,6 +222,9 @@ export const trackMetaInitiateCheckout = (items, total, checkoutId) => {
 
 export const trackMetaPurchase = (order) => {
   if (!order) return false;
+
+  // Refresh manual Advanced Matching with the exact customer data attached to the order.
+  initializeMetaPixel(order.customer || order);
   const orderId = order.orderId || order.orderNumber;
   if (!orderId) return false;
 

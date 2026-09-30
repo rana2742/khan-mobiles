@@ -7,19 +7,24 @@ import Footer from '../components/Footer';
 import Container from '../components/Container';
 import Button from '../components/Button';
 import { trackTikTokPurchase, trackMetaPurchase } from '../services/metaPixel';
+import { useAuth } from '../context/AuthContext';
 
 const OrderConfirmation = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [order, setOrder] = useState(location.state || null);
   const [downloadingInvoice, setDownloadingInvoice] = useState(false);
   const [invoiceError, setInvoiceError] = useState('');
+  const isAuthenticatedOrder = !!user;
+  const invoiceToken = order?.invoiceToken || '';
 
   const handleDownloadInvoice = async () => {
     setDownloadingInvoice(true);
     setInvoiceError('');
     try {
-      await downloadFile(`/api/orders/${order.orderId}/invoice`, `invoice-${order.orderNumber}.pdf`);
+      const tokenQuery = invoiceToken ? `?token=${encodeURIComponent(invoiceToken)}` : '';
+      await downloadFile(`/api/orders/${order.orderId}/invoice${tokenQuery}`, `invoice-${order.orderNumber}.pdf`);
     } catch (err) {
       setInvoiceError(err.message || 'Could not download invoice.');
     } finally {
@@ -156,13 +161,15 @@ const OrderConfirmation = () => {
               )}
             </div>
 
-            {invoiceError && <p className="text-red-600 text-sm mb-3">{invoiceError}</p>}
-            <div className="flex flex-col sm:flex-row gap-3 justify-center">
-              <button onClick={handleDownloadInvoice} disabled={downloadingInvoice}
-                className="text-sm font-semibold text-accent hover:underline">
-                {downloadingInvoice ? 'Preparing PDF…' : '⬇ Download Invoice'}
-              </button>
-            </div>
+            {isAuthenticatedOrder && invoiceError && <p className="text-red-600 text-sm mb-3">{invoiceError}</p>}
+            {(isAuthenticatedOrder || invoiceToken) && (
+              <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                <button onClick={handleDownloadInvoice} disabled={downloadingInvoice}
+                  className="text-sm font-semibold text-accent hover:underline">
+                  {downloadingInvoice ? 'Preparing PDF…' : '⬇ Download Invoice'}
+                </button>
+              </div>
+            )}
             <div className="flex flex-col sm:flex-row gap-3 justify-center mt-4">
               <Link to="/shop"><Button variant="secondary">Continue Shopping</Button></Link>
               <Link to="/orders"><Button>View My Orders</Button></Link>

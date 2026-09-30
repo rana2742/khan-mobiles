@@ -29,7 +29,8 @@ const orderSchema = new mongoose.Schema(
   {
     orderNumber: { type: String, required: true, unique: true },
     idempotencyKey: { type: String, default: null, unique: true, sparse: true, maxlength: 100 },
-    user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    guestInvoiceTokenHash: { type: String, default: null, select: false, index: true },
+    user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     subtotal: { type: Number, required: true, min: 0 },
     discount: { type: Number, default: 0, min: 0 },
     deliveryFee: { type: Number, default: 0, min: 0 },

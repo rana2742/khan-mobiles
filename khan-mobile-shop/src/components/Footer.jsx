@@ -91,7 +91,7 @@ const Footer = () => (
               <a href="tel:+923166953535" className="hover:text-accent transition-colors">+92 316 695 3534</a>
             </p>
             <a
-              href="https://wa.me/923166953535"
+              href="https://wa.me/923166953534"
               target="_blank"
               rel="noopener noreferrer"
               onClick={() => trackMetaContact('whatsapp-footer')}

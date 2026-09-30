@@ -1,9 +1,11 @@
 const mongoose = require('mongoose');
+const crypto = require('crypto');
 const Order = require('../models/Order');
 const Product = require('../models/Product');
 const Review = require('../models/Review');
 const { sendOrderConfirmationEmail, sendOrderStatusEmail } = require('../utils/email');
 const { streamInvoice } = require('../utils/invoice');
+const { sendMetaPurchase } = require('../services/metaConversionsApi');
 
 const generateOrderNumber = () => `KM-${Date.now().toString().slice(-8)}${Math.floor(Math.random() * 90 + 10)}`;
 const courierPayload = (courier) => courier ? {
@@ -18,17 +20,19 @@ const courierPayload = (courier) => courier ? {
 } : null;
 
 const roundMoney = (value) => Math.round((Number(value) + Number.EPSILON) * 100) / 100;
+const createGuestInvoiceToken = () => crypto.randomBytes(32).toString('hex');
+const hashGuestInvoiceToken = (token) => crypto.createHash('sha256').update(String(token)).digest('hex');
 
 exports.create = async (req, res) => {
   const {
     items, promoCode, fullName, email, phone, address, landmark, city,
-    paymentMethod = 'cod', idempotencyKey,
+    paymentMethod = 'cod', idempotencyKey, metaTrackingContext,
   } = req.body;
 
   if (!Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ success: false, message: 'Your cart is empty.' });
   }
-  if (!req.user.emailVerified) {
+  if (req.user && !req.user.emailVerified) {
     return res.status(403).json({ success: false, message: 'Please verify your email address before placing an order.', code: 'EMAIL_NOT_VERIFIED' });
   }
   if (!fullName?.trim() || !email?.trim() || !phone?.trim() || !address?.trim() || !city?.trim()) {
@@ -44,32 +48,43 @@ exports.create = async (req, res) => {
   // A retry of the same checkout submission returns the existing order instead
   // of reserving stock and creating a second order.
   if (idempotencyKey) {
-    const existing = await Order.findOne({ idempotencyKey, user: req.user._id });
+    const existing = await Order.findOne(req.user ? { idempotencyKey, user: req.user._id } : { idempotencyKey, user: null, email: email.trim().toLowerCase() });
     if (existing) {
+      const existingPayload = {
+        orderId: existing._id.toString(),
+        orderNumber: existing.orderNumber,
+        subtotal: Number(existing.subtotal),
+        discount: Number(existing.discount),
+        deliveryFee: Number(existing.deliveryFee),
+        total: Number(existing.total),
+        items: existing.items.map((i) => ({
+          productId: i.product?.toString() || null,
+          name: i.name,
+          price: Number(i.price),
+          quantity: Number(i.quantity),
+          imageUrl: i.imageUrl,
+        })),
+        fullName: existing.fullName,
+        email: existing.email,
+        phone: existing.phone,
+        city: existing.city,
+        placedAt: existing.createdAt.toISOString(),
+      };
+
+      sendMetaPurchase({ order: existingPayload, req, trackingContext: metaTrackingContext }).catch((err) => {
+        console.error('[meta-capi] Purchase retry failed:', err.message);
+      });
+
       return res.status(200).json({
         success: true,
         duplicate: true,
-        order: {
-          orderId: existing._id.toString(),
-          orderNumber: existing.orderNumber,
-          subtotal: Number(existing.subtotal),
-          discount: Number(existing.discount),
-          deliveryFee: Number(existing.deliveryFee),
-          total: Number(existing.total),
-          items: existing.items.map((i) => ({
-            productId: i.product?.toString() || null,
-            name: i.name,
-            price: Number(i.price),
-            quantity: i.quantity,
-            imageUrl: i.imageUrl,
-          })),
-          fullName: existing.fullName,
-          email: existing.email,
-          placedAt: existing.createdAt.toISOString(),
-        },
+        order: existingPayload,
       });
     }
   }
+
+  const guestInvoiceToken = req.user ? null : createGuestInvoiceToken();
+  const guestInvoiceTokenHash = guestInvoiceToken ? hashGuestInvoiceToken(guestInvoiceToken) : null;
 
   const session = await mongoose.startSession();
   try {
@@ -127,7 +142,8 @@ exports.create = async (req, res) => {
       const orderData = {
         orderNumber: generateOrderNumber(),
         idempotencyKey: idempotencyKey || undefined,
-        user: req.user._id,
+        user: req.user?._id || null,
+        guestInvoiceTokenHash,
         subtotal,
         discount,
         deliveryFee,
@@ -163,14 +179,25 @@ exports.create = async (req, res) => {
       })),
       fullName: orderDoc.fullName,
       email: orderDoc.email,
+      phone: orderDoc.phone,
+      city: orderDoc.city,
+      invoiceToken: guestInvoiceToken || undefined,
       placedAt: orderDoc.createdAt.toISOString(),
     };
 
     sendOrderConfirmationEmail(orderPayload).catch(() => {});
+
+    // Server-side Purchase is independent of the confirmation-page render.
+    // It uses the same event_id as the browser Pixel event so Meta can deduplicate
+    // the two copies instead of counting the same order twice.
+    sendMetaPurchase({ order: orderPayload, req, trackingContext: metaTrackingContext }).catch((err) => {
+      console.error('[meta-capi] Purchase failed:', err.message);
+    });
+
     res.status(201).json({ success: true, order: orderPayload });
   } catch (err) {
     if (err?.code === 11000 && idempotencyKey) {
-      const existing = await Order.findOne({ idempotencyKey, user: req.user._id });
+      const existing = await Order.findOne(req.user ? { idempotencyKey, user: req.user._id } : { idempotencyKey, user: null, email: email.trim().toLowerCase() });
       if (existing) {
         return res.status(200).json({
           success: true,
@@ -191,6 +218,9 @@ exports.create = async (req, res) => {
             })),
             fullName: existing.fullName,
             email: existing.email,
+            phone: existing.phone,
+            city: existing.city,
+            invoiceToken: req.user ? undefined : undefined,
             placedAt: existing.createdAt.toISOString(),
           },
         });
@@ -230,14 +260,14 @@ exports.cancelMine = async (req, res) => {
 exports.listAll = async (req, res) => {
   const { status } = req.query;
   const orders = await Order.find(status ? { status } : {}).sort({ createdAt: -1 }).limit(200).populate('user', 'name email');
-  res.json({ success: true, orders: orders.map((o) => ({ id: o._id.toString(), orderNumber: o.orderNumber, customerName: o.user?.name, customerEmail: o.user?.email, total: Number(o.total), status: o.status, city: o.city, paymentMethod: o.paymentMethod, createdAt: o.createdAt, courier: courierPayload(o.courier) })) });
+  res.json({ success: true, orders: orders.map((o) => ({ id: o._id.toString(), orderNumber: o.orderNumber, customerName: o.user?.name || o.fullName, customerEmail: o.user?.email || o.email, total: Number(o.total), status: o.status, city: o.city, paymentMethod: o.paymentMethod, createdAt: o.createdAt, courier: courierPayload(o.courier) })) });
 };
 
 exports.getOne = async (req, res) => {
   const order = await Order.findById(req.params.id).populate('user', 'name email');
   if (!order) return res.status(404).json({ success: false, message: 'Order not found.' });
   res.json({ success: true, order: {
-    id: order._id.toString(), orderNumber: order.orderNumber, status: order.status, customerName: order.user?.name, customerAccountEmail: order.user?.email,
+    id: order._id.toString(), orderNumber: order.orderNumber, status: order.status, customerName: order.user?.name || order.fullName, customerAccountEmail: order.user?.email || order.email,
     fullName: order.fullName, email: order.email, phone: order.phone, address: order.address, landmark: order.landmark, city: order.city, paymentMethod: order.paymentMethod,
     subtotal: Number(order.subtotal), discount: Number(order.discount), deliveryFee: Number(order.deliveryFee), total: Number(order.total), promoCode: order.promoCode, createdAt: order.createdAt, courier: courierPayload(order.courier),
     items: order.items.map((i) => ({ name: i.name, price: Number(i.price), quantity: i.quantity, imageUrl: i.imageUrl, productId: i.product ? i.product.toString() : null })),
@@ -257,9 +287,14 @@ exports.updateStatus = async (req, res) => {
 };
 
 exports.downloadInvoice = async (req, res) => {
-  const order = await Order.findById(req.params.id);
+  const token = typeof req.query.token === 'string' ? req.query.token : '';
+  const tokenHash = token ? hashGuestInvoiceToken(token) : '';
+  const order = await Order.findById(req.params.id).select('+guestInvoiceTokenHash');
+  
   if (!order) return res.status(404).json({ success: false, message: 'Order not found.' });
-  if (order.user.toString() !== req.user._id.toString() && req.user.role !== 'admin') return res.status(403).json({ success: false, message: 'You can only download your own invoices.' });
+  const authenticatedOwner = req.user && order.user && order.user.toString() === req.user._id.toString();
+  const guestOwner = !order.user && tokenHash && order.guestInvoiceTokenHash === tokenHash;
+  if (!authenticatedOwner && !guestOwner && req.user?.role !== 'admin') return res.status(403).json({ success: false, message: 'Invalid invoice access.' });
   streamInvoice({ orderNumber: order.orderNumber, status: order.status, createdAt: order.createdAt, fullName: order.fullName, email: order.email, phone: order.phone, address: order.address, landmark: order.landmark, city: order.city, paymentMethod: order.paymentMethod, subtotal: Number(order.subtotal), discount: Number(order.discount), deliveryFee: Number(order.deliveryFee), total: Number(order.total), promoCode: order.promoCode, items: order.items.map((i) => ({ name: i.name, price: Number(i.price), quantity: Number(i.quantity) })) }, res);
 };
 

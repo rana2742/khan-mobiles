@@ -4,7 +4,8 @@ import { GoogleOAuthProvider } from '@react-oauth/google';
 import { HelmetProvider } from 'react-helmet-async';
 import AOS from 'aos';
 
-import { AuthProvider } from './context/AuthContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { initializeMetaPixel } from './services/metaPixel';
 import { CartProvider } from './context/CartContext';
 import Toast from './components/Toast';
 import WhatsAppButton from './components/WhatsAppButton';
@@ -36,6 +37,17 @@ import NotFound from './pages/NotFound';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 
+const MetaPixelBootstrap = () => {
+  const { user, loading } = useAuth();
+
+  useEffect(() => {
+    if (loading) return;
+    initializeMetaPixel(user || {});
+  }, [loading, user]);
+
+  return null;
+};
+
 const AppRoutes = () => (
   <BrowserRouter>
     <Routes>
@@ -44,8 +56,8 @@ const AppRoutes = () => (
       <Route path="/product/:id"        element={<ProductDetail />} />
       <Route path="/categories"         element={<Categories />} />
       <Route path="/cart"               element={<Cart />} />
-      <Route path="/checkout"           element={<ProtectedRoute><Checkout /></ProtectedRoute>} />
-      <Route path="/order-confirmation" element={<ProtectedRoute><OrderConfirmation /></ProtectedRoute>} />
+      <Route path="/checkout"           element={<Checkout />} />
+      <Route path="/order-confirmation" element={<OrderConfirmation />} />
       <Route path="/orders"             element={<ProtectedRoute><MyOrders /></ProtectedRoute>} />
       <Route path="/about"              element={<About />} />
       <Route path="/contact"            element={<Contact />} />
@@ -81,6 +93,7 @@ const App = () => {
       {providers(
         <AuthProvider>
           <CartProvider>
+            <MetaPixelBootstrap />
             <AppRoutes />
           </CartProvider>
         </AuthProvider>
