@@ -5,6 +5,7 @@ import Badge from './Badge';
 import Button from './Button';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
+import { trackMetaAddToCart } from '../services/metaPixel';
 
 const StarRating = ({ rating, reviewCount }) => (
   <div className="flex items-center gap-1">
@@ -69,6 +70,18 @@ const ProductCard = ({ id, name, price, compareAtPrice, category, rating, review
       value: Number(price),
       currency: 'PKR',
     });
+
+    // Keep Meta AddToCart consistent with the Product Detail page.
+    // Generate one action id per real click so duplicate handler calls can be deduplicated.
+    let actionId;
+    try {
+      actionId = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    } catch {
+      actionId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    }
+    trackMetaAddToCart({ id, name, price }, 1, actionId);
   };
 
   return (

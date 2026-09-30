@@ -4,6 +4,7 @@ import { api } from '../services/api';
 import Navbar from '../components/Navbar';
 import SEO from '../components/SEO';
 import Footer from '../components/Footer';
+import { trackMetaContact } from '../services/metaPixel';
 import Container from '../components/Container';
 import Button from '../components/Button';
 
@@ -44,6 +45,7 @@ const Contact = () => {
     setSubmitting(true);
     try {
       await api.post('/api/contact', form);
+      trackMetaContact('contact-form');
       setSubmitted(true);
       setForm(emptyForm);
     } catch (err) {

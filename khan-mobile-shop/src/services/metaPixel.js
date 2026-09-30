@@ -9,6 +9,7 @@
  */
 
 const META_PIXEL_ID = '819668267751439';
+const META_CURRENCY = 'PKR';
 
 // Explicitly enabled events:
 // - ViewContent: product detail page
@@ -30,6 +31,13 @@ const sentEvents = new Map();
 const isMetaReady = () =>
   typeof window !== 'undefined' &&
   typeof window.fbq === 'function';
+
+const toMetaMoney = (value) => {
+  const amount = typeof value === 'string'
+    ? Number(value.replace(/[^0-9.-]/g, ''))
+    : Number(value);
+  return Number.isFinite(amount) ? Math.round(Math.max(amount, 0) * 100) / 100 : null;
+};
 
 const makeEventId = (eventName, dedupeKey) => {
   if (dedupeKey) return `khan-${eventName}-${String(dedupeKey)}`;
@@ -77,44 +85,50 @@ export const trackMetaEvent = (eventName, parameters = {}, options = {}) => {
 
 export const trackMetaViewContent = (product) => {
   if (!product) return false;
+  const value = toMetaMoney(product.price);
+  if (value === null) return false;
   return trackMetaEvent('ViewContent', {
     content_ids: [String(product.id)],
     content_name: product.name,
     content_type: 'product',
-    value: Number(product.price),
-    currency: 'PKR',
+    value,
+    currency: META_CURRENCY,
   }, { dedupeKey: `product-${product.id}` });
 };
 
 export const trackMetaAddToCart = (product, quantity = 1, actionId) => {
   if (!product) return false;
   const qty = Math.max(1, Number(quantity) || 1);
+  const price = toMetaMoney(product.price);
+  if (price === null) return false;
   return trackMetaEvent('AddToCart', {
     content_ids: [String(product.id)],
     content_name: product.name,
     content_type: 'product',
-    value: Number(product.price) * qty,
-    currency: 'PKR',
+    value: toMetaMoney(price * qty),
+    currency: META_CURRENCY,
     contents: [{
       id: String(product.id),
       quantity: qty,
-      item_price: Number(product.price),
+      item_price: price,
     }],
   }, { dedupeKey: actionId || `product-${product.id}-${Date.now()}` });
 };
 
 export const trackMetaInitiateCheckout = (items, total, checkoutId) => {
   if (!Array.isArray(items) || items.length === 0) return false;
+  const value = toMetaMoney(total);
+  if (value === null) return false;
   return trackMetaEvent('InitiateCheckout', {
     content_ids: items.map((item) => String(item.id || item.productId)),
     contents: items.map((item) => ({
       id: String(item.id || item.productId),
       quantity: Math.max(1, Number(item.quantity) || 1),
-      item_price: Number(item.price),
+      item_price: toMetaMoney(item.price) ?? 0,
     })),
     content_type: 'product',
-    value: Number(total),
-    currency: 'PKR',
+    value,
+    currency: META_CURRENCY,
     num_items: items.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0),
   }, { dedupeKey: checkoutId || `checkout-${Date.now()}` });
 };
@@ -123,16 +137,26 @@ export const trackMetaPurchase = (order) => {
   if (!order) return false;
   const orderId = order.orderId || order.orderNumber;
   if (!orderId) return false;
+
+  // The API's order.total is the source of truth. Accept numeric strings as a
+  // fallback for persisted/legacy orders, but never send NaN, Infinity, or an
+  // empty value to Meta. Purchase is only fired when a valid monetary value exists.
+  const value = toMetaMoney(order.total);
+  if (value === null) return false;
+
+  const items = Array.isArray(order.items) ? order.items : [];
   return trackMetaEvent('Purchase', {
-    content_ids: (order.items || []).map((item) => String(item.productId || item.id)),
-    contents: (order.items || []).map((item) => ({
+    content_ids: items.map((item) => String(item.productId || item.id)),
+    contents: items.map((item) => ({
       id: String(item.productId || item.id),
       quantity: Math.max(1, Number(item.quantity) || 1),
-      item_price: Number(item.price),
+      item_price: toMetaMoney(item.price) ?? 0,
     })),
     content_type: 'product',
-    value: Number(order.total),
-    currency: 'PKR',
+    value,
+    currency: META_CURRENCY,
+    num_items: items.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0),
+    order_id: String(orderId),
   }, { dedupeKey: `order-${orderId}` });
 };
 
@@ -168,7 +192,7 @@ export const trackTikTokViewContent = (product) => {
       }],
       content_type: 'product',
       value: Number(product.price),
-      currency: 'PKR',
+      currency: META_CURRENCY,
     });
   });
 };
@@ -183,9 +207,8 @@ export const trackTikTokAddToCart = (product, quantity = 1) => {
       quantity: Number(quantity),
       price: Number(product.price),
     }],
-    content_type: 'product',
     value: Number(product.price) * Number(quantity),
-    currency: 'PKR',
+    currency: META_CURRENCY,
   });
 };
 
@@ -200,7 +223,7 @@ export const trackTikTokInitiateCheckout = (items, total) => {
       price: Number(item.price),
     })),
     value: Number(total),
-    currency: 'PKR',
+    currency: META_CURRENCY,
   });
 };
 
@@ -217,7 +240,7 @@ export const trackTikTokPurchase = (order) => {
         price: Number(item.price),
       })),
       value: Number(order.total),
-      currency: 'PKR',
+      currency: META_CURRENCY,
     });
   });
 };

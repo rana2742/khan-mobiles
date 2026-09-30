@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion';
+import { trackMetaContact } from '../services/metaPixel';
 
 // TODO: Replace with the real business WhatsApp number (include country code, no + or spaces)
 // before going live — e.g. '923001234567' for a Pakistani +92 300 1234567 number.
@@ -8,9 +9,14 @@ const DEFAULT_MESSAGE = "Hi! I have a question about an order from Khan Mobile S
 const WhatsAppButton = () => {
   const href = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(DEFAULT_MESSAGE)}`;
 
+  const handleWhatsAppClick = () => {
+    trackMetaContact('whatsapp');
+  };
+
   return (
     <motion.a
       href={href}
+      onClick={handleWhatsAppClick}
       target="_blank"
       rel="noopener noreferrer"
       aria-label="Chat with us on WhatsApp"

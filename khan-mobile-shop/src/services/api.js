@@ -53,6 +53,10 @@ export const downloadFile = async (path, filename) => {
     throw new ApiError(data?.message || `Download failed (${res.status})`, res.status, data);
   }
   const blob = await res.blob();
+  if (!blob.size) {
+    throw new ApiError('The invoice PDF is empty. Please try again.', 500, null);
+  }
+
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -60,7 +64,10 @@ export const downloadFile = async (path, filename) => {
   document.body.appendChild(a);
   a.click();
   a.remove();
-  URL.revokeObjectURL(url);
+
+  // Give the browser time to start reading the Blob before revoking its URL.
+  // Revoking immediately can produce an empty/blank downloaded PDF in some browsers.
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 };
 
 export { ApiError, API_URL };

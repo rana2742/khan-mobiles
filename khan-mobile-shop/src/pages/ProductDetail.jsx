@@ -189,6 +189,34 @@ const ProductDetail = () => {
   const activeImage = gallery[activeImageIndex]?.url || imageUrl;
   const onSale = safeCompareAtPrice > safePrice;
   const discountPct = onSale ? Math.round(((safeCompareAtPrice - safePrice) / safeCompareAtPrice) * 100) : 0;
+  const productSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'Product',
+    category: category || undefined,
+    isRelatedTo: related.length ? related.map((item) => ({ '@type': 'Product', name: item.name, sku: String(item.id) })) : undefined,
+    name,
+    description: description || `${name} by ${brand}`,
+    image: gallery.map((img) => img.url).filter(Boolean),
+    sku: String(product.id),
+    brand: brand ? { '@type': 'Brand', name: brand } : undefined,
+    offers: {
+      '@type': 'Offer',
+      url: `https://khanmobile.pk/product/${product.id}`,
+      priceCurrency: 'PKR',
+      price: safePrice.toFixed(2),
+      availability: safeStock > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+      itemCondition: 'https://schema.org/NewCondition',
+    },
+    ...(safeReviewCount > 0 && safeRating > 0 ? {
+      aggregateRating: {
+        '@type': 'AggregateRating',
+        ratingValue: safeRating.toFixed(1),
+        reviewCount: safeReviewCount,
+        bestRating: '5',
+        worstRating: '1',
+      },
+    } : {}),
+  };
 
   const requireLogin = () => {
     navigate(`/login?redirect=${encodeURIComponent(location.pathname)}`);
@@ -231,6 +259,7 @@ const ProductDetail = () => {
         description={description || `${name} by ${brand} — Rs. ${safePrice.toLocaleString('en-PK')}. Available now at Khan Mobile Shop with fast delivery across Pakistan.`}
         path={`/product/${product.id}`}
         image={activeImage}
+        structuredData={productSchema}
       />
       <Navbar />
       <main className="pt-16 min-h-screen">

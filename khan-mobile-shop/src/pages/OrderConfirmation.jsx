@@ -41,12 +41,34 @@ const OrderConfirmation = () => {
   useEffect(() => {
     if (!order) return;
 
-    const purchaseKey = `khan-mobile-purchase-${order.orderId || order.orderNumber}`;
-    if (sessionStorage.getItem(purchaseKey)) return;
+    const orderKey = order.orderId || order.orderNumber;
+    if (!orderKey) return;
 
-    trackTikTokPurchase(order);
-    trackMetaPurchase(order);
-    sessionStorage.setItem(purchaseKey, '1');
+    // Persist the order so a refresh/direct revisit can still resolve the purchase payload.
+    try {
+      sessionStorage.setItem('khan-mobile-last-order', JSON.stringify(order));
+    } catch {
+      /* ignore storage failures */
+    }
+
+    const metaPurchaseKey = `khan-mobile-meta-purchase-${orderKey}`;
+    try {
+      if (!sessionStorage.getItem(metaPurchaseKey)) {
+        const sent = trackMetaPurchase(order);
+        // Only mark Meta Purchase as sent when fbq() actually accepted the event.
+        // This allows a retry if the Pixel script was temporarily unavailable.
+        if (sent) sessionStorage.setItem(metaPurchaseKey, '1');
+      }
+    } catch {
+      /* tracking/storage failures must never affect order confirmation */
+    }
+
+    // TikTok has its own once-per-session guard inside trackTikTokPurchase().
+    try {
+      trackTikTokPurchase(order);
+    } catch {
+      /* tracking must never affect order confirmation */
+    }
   }, [order]);
 
   if (!order) {
