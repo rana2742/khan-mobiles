@@ -14,9 +14,28 @@ const titleCase = (value) =>
 const streamInvoice = (order, res) => {
   const doc = new PDFDocument({ size: 'A4', margin: 50 });
 
-  res.setHeader('Content-Type', 'application/pdf');
-  res.setHeader('Content-Disposition', `attachment; filename="invoice-${order.orderNumber}.pdf"`);
-  doc.pipe(res);
+  // Buffer the complete PDF before sending it. This is more reliable on serverless/proxy deployments
+  // than piping a PDF stream directly into the HTTP response, which can result in a zero/blank PDF.
+  const chunks = [];
+  let responseSent = false;
+  doc.on('data', (chunk) => chunks.push(chunk));
+  doc.on('error', (err) => {
+    if (!responseSent && !res.headersSent) {
+      res.status(500).json({ success: false, message: 'Could not generate invoice PDF.' });
+    }
+  });
+  doc.on('end', () => {
+    if (responseSent) return;
+    responseSent = true;
+    const pdf = Buffer.concat(chunks);
+    if (!pdf.length) {
+      return res.status(500).json({ success: false, message: 'Generated invoice PDF is empty.' });
+    }
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="invoice-${order.orderNumber}.pdf"`);
+    res.setHeader('Content-Length', pdf.length);
+    res.end(pdf);
+  });
 
   const page = { left: 50, right: 545, width: 495 };
   const navy = '#0F172A';

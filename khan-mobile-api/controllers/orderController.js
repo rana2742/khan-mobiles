@@ -50,6 +50,11 @@ exports.create = async (req, res) => {
   if (idempotencyKey) {
     const existing = await Order.findOne(req.user ? { idempotencyKey, user: req.user._id } : { idempotencyKey, user: null, email: email.trim().toLowerCase() });
     if (existing) {
+      const retryInvoiceToken = !existing.user ? createGuestInvoiceToken() : null;
+      if (retryInvoiceToken) {
+        existing.guestInvoiceTokenHash = hashGuestInvoiceToken(retryInvoiceToken);
+        await existing.save();
+      }
       const existingPayload = {
         orderId: existing._id.toString(),
         orderNumber: existing.orderNumber,
@@ -67,13 +72,20 @@ exports.create = async (req, res) => {
         fullName: existing.fullName,
         email: existing.email,
         phone: existing.phone,
+        address: existing.address,
+        landmark: existing.landmark,
         city: existing.city,
+        invoiceToken: retryInvoiceToken || undefined,
         placedAt: existing.createdAt.toISOString(),
       };
 
-      sendMetaPurchase({ order: existingPayload, req, trackingContext: metaTrackingContext }).catch((err) => {
-        console.error('[meta-capi] Purchase retry failed:', err.message);
-      });
+      if (!existing.metaPurchaseSentAt) {
+        sendMetaPurchase({ order: existingPayload, req, trackingContext: metaTrackingContext })
+          .then(() => Order.updateOne({ _id: existing._id, metaPurchaseSentAt: null }, { $set: { metaPurchaseSentAt: new Date() } }))
+          .catch((err) => {
+            console.error('[meta-capi] Purchase retry failed:', err.message);
+          });
+      }
 
       return res.status(200).json({
         success: true,
@@ -180,6 +192,8 @@ exports.create = async (req, res) => {
       fullName: orderDoc.fullName,
       email: orderDoc.email,
       phone: orderDoc.phone,
+      address: orderDoc.address,
+      landmark: orderDoc.landmark,
       city: orderDoc.city,
       invoiceToken: guestInvoiceToken || undefined,
       placedAt: orderDoc.createdAt.toISOString(),
@@ -190,39 +204,57 @@ exports.create = async (req, res) => {
     // Server-side Purchase is independent of the confirmation-page render.
     // It uses the same event_id as the browser Pixel event so Meta can deduplicate
     // the two copies instead of counting the same order twice.
-    sendMetaPurchase({ order: orderPayload, req, trackingContext: metaTrackingContext }).catch((err) => {
-      console.error('[meta-capi] Purchase failed:', err.message);
-    });
+    sendMetaPurchase({ order: orderPayload, req, trackingContext: metaTrackingContext })
+      .then(() => Order.updateOne({ _id: orderDoc._id, metaPurchaseSentAt: null }, { $set: { metaPurchaseSentAt: new Date() } }))
+      .catch((err) => {
+        // Tracking failure must never fail or delay the customer's order.
+        console.error('[meta-capi] Purchase failed:', err.message);
+      });
 
     res.status(201).json({ success: true, order: orderPayload });
   } catch (err) {
     if (err?.code === 11000 && idempotencyKey) {
       const existing = await Order.findOne(req.user ? { idempotencyKey, user: req.user._id } : { idempotencyKey, user: null, email: email.trim().toLowerCase() });
       if (existing) {
+        const retryInvoiceToken = !existing.user ? createGuestInvoiceToken() : null;
+        if (retryInvoiceToken) {
+          existing.guestInvoiceTokenHash = hashGuestInvoiceToken(retryInvoiceToken);
+          await existing.save();
+        }
+        const duplicatePayload = {
+          orderId: existing._id.toString(),
+          orderNumber: existing.orderNumber,
+          subtotal: Number(existing.subtotal),
+          discount: Number(existing.discount),
+          deliveryFee: Number(existing.deliveryFee),
+          total: Number(existing.total),
+          items: existing.items.map((i) => ({
+            productId: i.product?.toString() || null,
+            name: i.name,
+            price: Number(i.price),
+            quantity: Number(i.quantity),
+            imageUrl: i.imageUrl,
+          })),
+          fullName: existing.fullName,
+          email: existing.email,
+          phone: existing.phone,
+          address: existing.address,
+          landmark: existing.landmark,
+          city: existing.city,
+          invoiceToken: retryInvoiceToken || undefined,
+          placedAt: existing.createdAt.toISOString(),
+        };
+
+        if (!existing.metaPurchaseSentAt) {
+          sendMetaPurchase({ order: duplicatePayload, req, trackingContext: metaTrackingContext })
+            .then(() => Order.updateOne({ _id: existing._id, metaPurchaseSentAt: null }, { $set: { metaPurchaseSentAt: new Date() } }))
+            .catch((metaErr) => console.error('[meta-capi] Purchase duplicate retry failed:', metaErr.message));
+        }
+
         return res.status(200).json({
           success: true,
           duplicate: true,
-          order: {
-            orderId: existing._id.toString(),
-            orderNumber: existing.orderNumber,
-            subtotal: Number(existing.subtotal),
-            discount: Number(existing.discount),
-            deliveryFee: Number(existing.deliveryFee),
-            total: Number(existing.total),
-            items: existing.items.map((i) => ({
-              productId: i.product?.toString() || null,
-              name: i.name,
-              price: Number(i.price),
-              quantity: Number(i.quantity),
-              imageUrl: i.imageUrl,
-            })),
-            fullName: existing.fullName,
-            email: existing.email,
-            phone: existing.phone,
-            city: existing.city,
-            invoiceToken: req.user ? undefined : undefined,
-            placedAt: existing.createdAt.toISOString(),
-          },
+          order: duplicatePayload,
         });
       }
     }

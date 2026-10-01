@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { api } from '../services/api';
 import { useCart } from '../context/CartContext';
@@ -11,7 +11,8 @@ import Container from '../components/Container';
 import Button from '../components/Button';
 import Badge from '../components/Badge';
 import ProductCard from '../components/ProductCard';
-import { trackTikTokViewContent, trackTikTokAddToCart, trackTikTokInitiateCheckout, trackMetaViewContent, trackMetaAddToCart } from '../services/metaPixel';
+import { trackTikTokViewContent, trackTikTokAddToCart, trackMetaViewContent, trackMetaAddToCart } from '../services/metaPixel';
+import { trackGA4ViewItem, trackGA4AddToCart } from '../services/analytics';
 
 const badgeVariantMap = { New: 'accent', Hot: 'warning', Sale: 'warning', Bestseller: 'success' };
 
@@ -88,7 +89,6 @@ const ReviewsSection = ({ productId, rating, reviewCount }) => {
 const ProductDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const location = useLocation();
   const { addItem } = useCart();
   const { isAuthenticated } = useAuth();
   const [quantity, setQuantity] = useState(1);
@@ -148,6 +148,7 @@ const ProductDetail = () => {
     if (!product) return;
     try { trackTikTokViewContent(product); } catch { /* tracking must never break rendering */ }
     try { trackMetaViewContent(product); } catch { /* Meta tracking must never break rendering */ }
+    try { trackGA4ViewItem(product); } catch { /* GA4 tracking must never break rendering */ }
   }, [product]);
 
   if (loading) {
@@ -218,13 +219,7 @@ const ProductDetail = () => {
     } : {}),
   };
 
-  const requireLogin = () => {
-    navigate(`/login?redirect=${encodeURIComponent(location.pathname)}`);
-  };
-
   const handleAddToCart = () => {
-    if (!isAuthenticated) return requireLogin();
-
     addItem(product, quantity);
     setAdded(true);
     setTimeout(() => setAdded(false), 2000);
@@ -243,12 +238,11 @@ const ProductDetail = () => {
       actionId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     }
     trackMetaAddToCart(product, quantity, actionId);
+    try { trackGA4AddToCart(product, quantity); } catch { /* GA4 tracking must never break rendering */ }
   };
 
   const handleBuyNow = () => {
-    if (!isAuthenticated) return requireLogin();
     addItem(product, quantity);
-    trackTikTokInitiateCheckout([product], Number(product.price) * Number(quantity));
     navigate('/checkout');
   };
 
@@ -385,23 +379,31 @@ const ProductDetail = () => {
               </Button>
               {!isAuthenticated && (
                 <p className="text-xs text-slate-500 text-center mt-2">
-                  <Link to="/login" className="text-accent hover:underline">Log in</Link> to add items to your cart.
+                  You can continue as a guest — no account required.
                 </p>
               )}
 
-              <div className="grid grid-cols-3 gap-4 mt-10 pt-8 border-t border-navy-700 text-center">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-10 pt-8 border-t border-navy-700 text-center">
                 <div>
                   <span className="text-2xl block mb-1">🚚</span>
-                  <p className="text-xs text-slate-500">Free delivery over Rs. 2,000</p>
+                  <p className="text-xs text-slate-500">Free delivery across Pakistan</p>
                 </div>
                 <div>
                   <span className="text-2xl block mb-1">↩️</span>
                   <p className="text-xs text-slate-500">7-day easy returns</p>
                 </div>
                 <div>
-                  <span className="text-2xl block mb-1">🛡️</span>
-                  <p className="text-xs text-slate-500">1-year warranty</p>
+                  <span className="text-2xl block mb-1">🔒</span>
+                  <p className="text-xs text-slate-500">Secure checkout</p>
                 </div>
+                <div>
+                  <span className="text-2xl block mb-1">🛡️</span>
+                  <p className="text-xs text-slate-500">{brand?.toLowerCase() === 'hottu' ? '1-year warranty' : 'Quality checked'}</p>
+                </div>
+              </div>
+
+              <div className="mt-4 text-center">
+                <p className="text-xs text-slate-500">Cash on Delivery available</p>
               </div>
             </motion.div>
           </div>

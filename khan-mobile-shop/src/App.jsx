@@ -1,11 +1,12 @@
 import { useEffect } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { HelmetProvider } from 'react-helmet-async';
 import AOS from 'aos';
 
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { initializeMetaPixel } from './services/metaPixel';
+import { initializeGA4, trackGA4PageView } from './services/analytics';
 import { CartProvider } from './context/CartContext';
 import Toast from './components/Toast';
 import WhatsAppButton from './components/WhatsAppButton';
@@ -37,6 +38,24 @@ import NotFound from './pages/NotFound';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 
+const GA4Bootstrap = () => {
+  useEffect(() => {
+    initializeGA4();
+  }, []);
+
+  return null;
+};
+
+const GA4PageViewTracker = () => {
+  const location = useLocation();
+
+  useEffect(() => {
+    trackGA4PageView(location.pathname + location.search);
+  }, [location.pathname, location.search]);
+
+  return null;
+};
+
 const MetaPixelBootstrap = () => {
   const { user, loading } = useAuth();
 
@@ -50,6 +69,7 @@ const MetaPixelBootstrap = () => {
 
 const AppRoutes = () => (
   <BrowserRouter>
+    <GA4PageViewTracker />
     <Routes>
       <Route path="/"                   element={<Home />} />
       <Route path="/shop"               element={<Shop />} />
@@ -94,6 +114,7 @@ const App = () => {
         <AuthProvider>
           <CartProvider>
             <MetaPixelBootstrap />
+            <GA4Bootstrap />
             <AppRoutes />
           </CartProvider>
         </AuthProvider>

@@ -9,8 +9,43 @@ import Footer from '../components/Footer';
 import Container from '../components/Container';
 import Button from '../components/Button';
 import { trackTikTokInitiateCheckout, trackMetaInitiateCheckout, getMetaTrackingContext } from '../services/metaPixel';
+import { trackGA4BeginCheckout } from '../services/analytics';
 
-const CITIES = ['Lahore', 'Karachi', 'Islamabad', 'Rawalpindi', 'Faisalabad', 'Multan', 'Peshawar', 'Quetta'];
+// Major and commonly served cities across Pakistan. The 2023 census identifies 127 cities
+// with populations above 100,000; this list covers those major urban centers plus
+// Islamabad, Azad Kashmir and Gilgit-Baltistan hubs commonly used for deliveries.
+const CITIES = [
+  // Punjab
+  'Lahore', 'Faisalabad', 'Rawalpindi', 'Gujranwala', 'Multan', 'Sargodha', 'Sialkot',
+  'Bahawalpur', 'Jhang', 'Sheikhupura', 'Gujrat', 'Sahiwal', 'Rahim Yar Khan', 'Kasur',
+  'Okara', 'Dera Ghazi Khan', 'Wah Cantonment', 'Chiniot', 'Jhelum', 'Hafizabad',
+  'Khanewal', 'Bahawalnagar', 'Muzaffargarh', 'Mandi Bahauddin', 'Attock', 'Kamoke',
+  'Burewala', 'Sadiqabad', 'Pakpattan', 'Wazirabad', 'Muridke', 'Kharian', 'Jaranwala',
+  'Samundri', 'Toba Tek Singh', 'Mianwali', 'Bhakkar', 'Layyah', 'Vehari', 'Chakwal',
+  'Mailsi', 'Kot Addu', 'Lodhran', 'Arifwala', 'Hasilpur', 'Kahror Pakka', 'Daska',
+  'Sambrial', 'Narowal', 'Shakargarh', 'Kunjah', 'Kharian', 'Talagang', 'Taxila',
+  'Ferozewala', 'Kot Abdul Malik', 'Chishtian', 'Khanpur', 'Liaquatpur', 'Ahmadpur East',
+  'Yazman', 'Rajanpur', 'Alipur', 'Jatoi', 'Shujaabad', 'Kabirwala', 'Lodhran',
+  // Sindh
+  'Karachi', 'Hyderabad', 'Sukkur', 'Larkana', 'Nawabshah', 'Mirpur Khas', 'Jacobabad',
+  'Shikarpur', 'Khairpur', 'Dadu', 'Tando Adam', 'Tando Allahyar', 'Tando Muhammad Khan',
+  'Badin', 'Thatta', 'Kotri', 'Ghotki', 'Kandhkot', 'Kamber Ali Khan', 'Shahdadkot',
+  'Daharki', 'Mirpur Mathelo', 'Umerkot', 'Matiari', 'Naushahro Feroze', 'Sanghar',
+  'Moro', 'Sehwan', 'Ratodero', 'Qambar', 'Kashmore',
+  // Khyber Pakhtunkhwa
+  'Peshawar', 'Mardan', 'Mingora', 'Kohat', 'Abbottabad', 'Dera Ismail Khan', 'Mansehra',
+  'Nowshera', 'Swabi', 'Charsadda', 'Bannu', 'Haripur', 'Karak', 'Buner', 'Tank',
+  'Batkhela', 'Timergara', 'Chitral', 'Hangu', 'Lakki Marwat', 'Daggar', 'Jamrud',
+  // Balochistan
+  'Quetta', 'Turbat', 'Khuzdar', 'Chaman', 'Hub', 'Gwadar', 'Sibi', 'Zhob', 'Loralai',
+  'Dera Murad Jamali', 'Kharan', 'Kalat', 'Mastung', 'Pishin', 'Nushki', 'Dalbandin',
+  // Islamabad Capital Territory
+  'Islamabad',
+  // Azad Jammu & Kashmir
+  'Muzaffarabad', 'Mirpur', 'Rawalakot', 'Kotli', 'Bagh', 'Bhimber', 'Dhirkot',
+  // Gilgit-Baltistan
+  'Gilgit', 'Skardu', 'Chilas', 'Hunza', 'Gahkuch', 'Khaplu'
+].filter((city, index, cities) => cities.indexOf(city) === index);
 
 const emptyForm = {
   fullName: '', email: '', phone: '', address: '', landmark: '', city: CITIES[0],
@@ -41,6 +76,7 @@ const Checkout = () => {
     if (!items.length) return;
 
     trackTikTokInitiateCheckout(items, Number(total));
+    try { trackGA4BeginCheckout(items, Number(total)); } catch { /* GA4 tracking must never break checkout */ }
 
     // Fire Meta InitiateCheckout once for this checkout instance. Cart edits
     // can re-render this component, but they should not create new checkout

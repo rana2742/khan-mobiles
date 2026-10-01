@@ -109,6 +109,11 @@ const buildAdvancedMatching = (customer = {}) => {
 export const initializeMetaPixel = (customer = {}) => {
   if (typeof window === 'undefined' || typeof window.fbq !== 'function') return false;
   try {
+    // Pixel initialization must happen only once. Re-initializing the same
+    // Pixel on every auth/order state change can create duplicate base setup
+    // and makes event attribution less predictable.
+    if (window.__KHAN_META_PIXEL_INITIALIZED) return true;
+
     const advancedMatching = buildAdvancedMatching(customer);
     window.fbq('init', META_PIXEL_ID, advancedMatching);
     window.__KHAN_META_PIXEL_INITIALIZED = true;
@@ -223,7 +228,8 @@ export const trackMetaInitiateCheckout = (items, total, checkoutId) => {
 export const trackMetaPurchase = (order) => {
   if (!order) return false;
 
-  // Refresh manual Advanced Matching with the exact customer data attached to the order.
+  // Pixel is initialized once during app bootstrap. Customer fields for the
+  // same purchase are also sent securely through the server-side CAPI event.
   initializeMetaPixel(order.customer || order);
   const orderId = order.orderId || order.orderNumber;
   if (!orderId) return false;

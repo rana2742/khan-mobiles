@@ -50,6 +50,9 @@ const orderSchema = new mongoose.Schema(
     },
     items: { type: [orderItemSchema], default: [] },
     courier: { type: courierSchema, default: null },
+    // Server-side Meta Purchase delivery state. This does not affect order
+    // checkout; it lets safe retries avoid losing an event after a transient CAPI failure.
+    metaPurchaseSentAt: { type: Date, default: null },
   },
   { timestamps: { createdAt: true, updatedAt: false } }
 );
