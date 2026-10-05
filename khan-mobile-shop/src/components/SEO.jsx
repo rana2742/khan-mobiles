@@ -2,7 +2,7 @@ import { Helmet } from 'react-helmet-async';
 import PropTypes from 'prop-types';
 
 const SITE_NAME = 'Khan Mobile Shop';
-const SITE_URL = 'https://khanmobile.pk';
+const SITE_URL = 'https://www.khanmobiles.store';
 const DEFAULT_IMAGE = `${SITE_URL}/og-default.png`;
 
 const SEO = ({ title, description, path = '', image, noindex = false, structuredData }) => {

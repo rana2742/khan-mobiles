@@ -202,7 +202,7 @@ const ProductDetail = () => {
     brand: brand ? { '@type': 'Brand', name: brand } : undefined,
     offers: {
       '@type': 'Offer',
-      url: `https://khanmobile.pk/product/${product.id}`,
+      url: `https://www.khanmobiles.store/product/${product.id}`,
       priceCurrency: 'PKR',
       price: safePrice.toFixed(2),
       availability: safeStock > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
