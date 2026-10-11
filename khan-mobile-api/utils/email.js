@@ -80,16 +80,5 @@ const sendOrderStatusEmail = (order, status) => {
   });
 };
 
- const sendVerificationEmail = (user, verifyUrl) => sendMail({
-  to: user.email,
-  subject: 'Verify your email — Khan Mobile Shop',
-  html: emailShell('Confirm your email address', `
-    <p style="color:#334155;">Hi ${user.name}, thanks for signing up! Click the button below to verify your email address.</p>
-    <p style="margin: 24px 0;">
-      <a href="${verifyUrl}" style="background:#3B82F6;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold;">Verify Email</a>
-    </p>
-    <p style="color:#94A3B8; font-size:12px;">This link expires in 24 hours. If you didn't create this account, you can safely ignore this email.</p>
-  `),
-});
 
-module.exports = { sendMail, sendOrderConfirmationEmail, sendOrderStatusEmail, sendVerificationEmail, isConfigured };
+module.exports = { sendMail, sendOrderConfirmationEmail, sendOrderStatusEmail, isConfigured };
