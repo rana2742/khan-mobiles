@@ -47,7 +47,7 @@ export const api = {
 // For binary responses (PDF invoices, etc.) — fetches with credentials, then
 // triggers a normal browser "Save As" download using the given filename.
 export const downloadFile = async (path, filename) => {
-  const res = await fetch(`${API_URL}${path}`, { credentials: 'include' });
+  const res = await fetch(`${API_URL}${path}`, { credentials: 'include', headers: { Accept: 'application/pdf' } });
   if (!res.ok) {
     const data = await res.json().catch(() => null);
     throw new ApiError(data?.message || `Download failed (${res.status})`, res.status, data);
