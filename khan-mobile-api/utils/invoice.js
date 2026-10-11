@@ -28,10 +28,13 @@ const streamInvoice = (order, res) => {
     if (responseSent) return;
     responseSent = true;
     const pdf = Buffer.concat(chunks);
-    if (!pdf.length) {
-      return res.status(500).json({ success: false, message: 'Generated invoice PDF is empty.' });
+    if (pdf.length < 100 || pdf.subarray(0, 5).toString('ascii') !== '%PDF-') {
+      return res.status(500).json({ success: false, message: 'Could not generate a valid invoice PDF.' });
     }
     res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Content-Disposition', `attachment; filename="invoice-${order.orderNumber}.pdf"`);
     res.setHeader('Content-Length', pdf.length);
     res.end(pdf);
