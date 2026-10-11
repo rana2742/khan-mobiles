@@ -1,14 +1,11 @@
 import { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { GoogleLogin } from '@react-oauth/google';
 import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import Container from '../components/Container';
 import Button from '../components/Button';
-
-const GOOGLE_CONFIGURED = !!import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
 // Small inline icons so the show/hide toggle doesn't need a new dependency.
 const EyeIcon = (props) => (
@@ -27,7 +24,7 @@ const EyeOffIcon = (props) => (
 );
 
 const Login = () => {
-  const { login, loginWithGoogle } = useAuth();
+  const { login } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const redirect = searchParams.get('redirect') || '/';
@@ -51,15 +48,6 @@ const Login = () => {
     }
   };
 
-  const handleGoogleSuccess = async (credentialResponse) => {
-    setError('');
-    try {
-      await loginWithGoogle(credentialResponse.credential);
-      navigate(redirect, { replace: true });
-    } catch (err) {
-      setError(err.message || 'Google sign-in failed.');
-    }
-  };
 
   return (
     <>
@@ -73,27 +61,6 @@ const Login = () => {
             <h1 className="text-2xl font-extrabold text-slate-900 mb-1 text-center">Welcome Back</h1>
             <p className="text-slate-500 text-sm text-center mb-8">Log in to continue to checkout.</p>
 
-            {GOOGLE_CONFIGURED ? (
-              <div className="flex justify-center mb-6">
-                <GoogleLogin
-                  onSuccess={handleGoogleSuccess}
-                  onError={() => setError('Google sign-in failed.')}
-                  theme="filled_black"
-                  shape="pill"
-                  width="320"
-                />
-              </div>
-            ) : (
-              <div className="bg-navy-700 border border-navy-700 rounded-xl2 px-4 py-3 text-xs text-slate-500 mb-6 text-center">
-                Google sign-in isn&apos;t configured yet. See the README to add your Client ID.
-              </div>
-            )}
-
-            <div className="flex items-center gap-3 mb-6">
-              <div className="flex-1 h-px bg-navy-700" />
-              <span className="text-xs text-slate-500 uppercase tracking-wider">or</span>
-              <div className="flex-1 h-px bg-navy-700" />
-            </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
