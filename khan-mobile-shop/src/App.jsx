@@ -1,6 +1,5 @@
 import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
-import { GoogleOAuthProvider } from '@react-oauth/google';
 import { HelmetProvider } from 'react-helmet-async';
 import AOS from 'aos';
 
@@ -10,7 +9,6 @@ import { initializeGA4, trackGA4PageView } from './services/analytics';
 import { CartProvider } from './context/CartContext';
 import Toast from './components/Toast';
 import WhatsAppButton from './components/WhatsAppButton';
-import EmailVerificationBanner from './components/EmailVerificationBanner';
 import ProtectedRoute from './components/ProtectedRoute';
 import AdminRoute from './components/AdminRoute';
 
@@ -27,7 +25,6 @@ import Login from './pages/Login';
 import Signup from './pages/Signup';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
-import VerifyEmail from './pages/VerifyEmail';
 import MyOrders from './pages/MyOrders';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminOrders from './pages/admin/AdminOrders';
@@ -35,8 +32,6 @@ import AdminMessages from './pages/admin/AdminMessages';
 import AdminReviews from './pages/admin/AdminReviews';
 import AdminProductForm from './pages/admin/AdminProductForm';
 import NotFound from './pages/NotFound';
-
-const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 
 const GA4Bootstrap = () => {
   useEffect(() => {
@@ -84,7 +79,6 @@ const AppRoutes = () => (
       <Route path="/login"              element={<Login />} />
       <Route path="/signup"             element={<Signup />} />
       <Route path="/reset-password"     element={<ResetPassword />} />
-      <Route path="/verify-email"       element={<VerifyEmail />} />
       <Route path="/admin"              element={<AdminRoute><AdminDashboard /></AdminRoute>} />
       <Route path="/admin/orders"       element={<AdminRoute><AdminOrders /></AdminRoute>} />
       <Route path="/admin/messages"     element={<AdminRoute><AdminMessages /></AdminRoute>} />
@@ -95,7 +89,6 @@ const AppRoutes = () => (
     </Routes>
  <Toast />
     <WhatsAppButton />
-    <EmailVerificationBanner />
   </BrowserRouter>
 );
 
@@ -104,21 +97,15 @@ const App = () => {
     AOS.init({ duration: 600, easing: 'ease-out-cubic', once: true });
   }, []);
 
-  const providers = (children) => GOOGLE_CLIENT_ID
-    ? <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>{children}</GoogleOAuthProvider>
-    : children;
-
   return (
     <HelmetProvider>
-      {providers(
-        <AuthProvider>
-          <CartProvider>
-            <MetaPixelBootstrap />
-            <GA4Bootstrap />
-            <AppRoutes />
-          </CartProvider>
-        </AuthProvider>
-      )}
+      <AuthProvider>
+        <CartProvider>
+          <MetaPixelBootstrap />
+          <GA4Bootstrap />
+          <AppRoutes />
+        </CartProvider>
+      </AuthProvider>
     </HelmetProvider>
   );
 };
