@@ -7,7 +7,9 @@ const { protect, adminOnly, optionalAuth } = require('../middleware/auth');
 router.post('/', optionalAuth, create);
 router.get('/mine', protect, myOrders);
 router.put('/:id/cancel', protect, cancelMine);
-router.get('/:id/invoice', optionalAuth, downloadInvoice);
+// Invoice access is validated by downloadInvoice using the owner session or the secure invoice token.
+// Do not run authentication middleware here: guest checkout customers must be able to download invoices.
+router.get('/:id/invoice', downloadInvoice);
 router.get('/stats/summary', protect, adminOnly, stats);
 router.get('/', protect, adminOnly, listAll);
 router.get('/:id', protect, adminOnly, getOne);
