@@ -52,9 +52,17 @@ export const downloadFile = async (path, filename) => {
     const data = await res.json().catch(() => null);
     throw new ApiError(data?.message || `Download failed (${res.status})`, res.status, data);
   }
+  const contentType = (res.headers.get('content-type') || '').toLowerCase();
   const blob = await res.blob();
   if (!blob.size) {
     throw new ApiError('The invoice PDF is empty. Please try again.', 500, null);
+  }
+  if (contentType.indexOf('application/pdf') === -1) {
+    throw new ApiError('The server did not return a PDF invoice. Please contact support if this continues.', 502, { contentType });
+  }
+  const signature = await blob.slice(0, 5).text();
+  if (signature !== '%PDF-') {
+    throw new ApiError('The downloaded file is not a valid PDF. Please try again.', 502, null);
   }
 
   const url = URL.createObjectURL(blob);
