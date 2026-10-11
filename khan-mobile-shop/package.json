@@ -10,7 +10,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@react-oauth/google": "^0.13.5",
     "aos": "^2.3.4",
     "framer-motion": "^12.0.0",
     "prop-types": "^15.8.1",

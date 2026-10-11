@@ -1,11 +1,8 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
-const { OAuth2Client } = require('google-auth-library');
 const User = require('../models/User');
-const { sendMail, sendVerificationEmail } = require('../utils/email');
-
-const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+const { sendMail } = require('../utils/email');
 
 const signToken = (id) =>
   jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRE || '7d' });
@@ -29,29 +26,12 @@ const toUserDTO = (user) => ({
   role: user.role,
   avatarUrl: user.avatarUrl,
   phone: user.phone,
-  hasGoogleLinked: !!user.googleId,
-  // Admins are always considered verified, no matter what's in the DB —
-  // this covers cases like changing the admin email/password directly,
-  // which would otherwise leave emailVerified at false for the new row.
-  emailVerified: user.role === 'admin' ? true : !!user.emailVerified,
 });
 
 const sendAuthResponse = (res, statusCode, user) => {
   const token = signToken(user._id.toString());
   res.cookie(process.env.COOKIE_NAME || 'khan_token', token, cookieOptions());
   res.status(statusCode).json({ success: true, user: toUserDTO(user) });
-};
-
-const VERIFY_TOKEN_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
-
-const sendVerificationForUser = async (user) => {
-  const rawToken = crypto.randomBytes(32).toString('hex');
-  const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
-  const expires = new Date(Date.now() + VERIFY_TOKEN_TTL_MS);
-
-  await User.updateOne({ _id: user._id }, { verifyTokenHash: tokenHash, verifyTokenExpires: expires });
-  const verifyUrl = `${process.env.CLIENT_URL}/verify-email?token=${rawToken}&email=${encodeURIComponent(user.email)}`;
-  return sendVerificationEmail(user, verifyUrl);
 };
 
 // POST /api/auth/register
@@ -77,10 +57,8 @@ exports.register = async (req, res) => {
     email: normalizedEmail,
     password: hashed,
     role: 'user',
-    emailVerified: false,
   });
 
-  sendVerificationForUser(user).catch(() => {}); // fire-and-forget, never blocks signup
   sendAuthResponse(res, 201, user);
 };
 
@@ -105,55 +83,6 @@ exports.login = async (req, res) => {
   sendAuthResponse(res, 200, user);
 };
 
-// POST /api/auth/google
-// Body: { credential } — the ID token returned by Google's "Sign in with Google" button.
-exports.googleAuth = async (req, res) => {
-  const { credential } = req.body;
-  if (!credential) {
-    return res.status(400).json({ success: false, message: 'Missing Google credential.' });
-  }
-  if (!process.env.GOOGLE_CLIENT_ID) {
-    return res.status(500).json({
-      success: false,
-      message: 'Google sign-in is not configured on the server yet (missing GOOGLE_CLIENT_ID).',
-    });
-  }
-
-  let payload;
-  try {
-    const ticket = await googleClient.verifyIdToken({
-      idToken: credential,
-      audience: process.env.GOOGLE_CLIENT_ID,
-    });
-    payload = ticket.getPayload();
-  } catch {
-    return res.status(401).json({ success: false, message: 'Invalid Google credential.' });
-  }
-
-  const { sub: googleId, email, name, picture } = payload;
-
-  let user = await User.findOne({ $or: [{ googleId }, { email: email.toLowerCase() }] });
-
-  if (!user) {
-    user = await User.create({
-      name: name || email,
-      email: email.toLowerCase(),
-      googleId,
-      avatarUrl: picture || null,
-      role: 'user',
-      emailVerified: true,
-    });
-  } else if (!user.googleId) {
-    // Existing email/password account signing in with Google for the first time — link it.
-    // Google has already confirmed this email address, so mark it verified too.
-    user.googleId = googleId;
-    user.avatarUrl = user.avatarUrl || picture || null;
-    user.emailVerified = true;
-    await user.save();
-  }
-
-  sendAuthResponse(res, 200, user);
-};
 
 // GET /api/auth/me
 exports.getMe = async (req, res) => {
@@ -184,9 +113,9 @@ exports.forgotPassword = async (req, res) => {
 
   const user = await User.findOne({ email: email.trim().toLowerCase() }).select('+password');
 
-  // No account, or a Google-only account with no password to reset — say
-  // nothing different, just don't actually send an email.
-  if (!user || !user.password) {
+  // Keep the response identical for unknown emails, while allowing legacy
+  // Google-only accounts to establish a password after Google sign-in is removed.
+  if (!user) {
     return genericResponse();
   }
 
@@ -248,42 +177,3 @@ exports.resetPassword = async (req, res) => {
   res.json({ success: true, message: 'Your password has been reset. You can now log in.' });
 };
 
-// POST /api/auth/verify-email
-// Body: { email, token }
-exports.verifyEmail = async (req, res) => {
-  const { email, token } = req.body;
-
-  if (!email?.trim() || !token) {
-    return res.status(400).json({ success: false, message: 'Missing required fields.' });
-  }
-
-  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-
-  const user = await User.findOne({
-    email: email.trim().toLowerCase(),
-    verifyTokenHash: tokenHash,
-  }).select('+verifyTokenHash');
-
-  if (!user || !user.verifyTokenExpires || new Date(user.verifyTokenExpires) < new Date()) {
-    return res.status(400).json({ success: false, message: 'This verification link is invalid or has expired. Please request a new one.' });
-  }
-
-  await User.updateOne(
-    { _id: user._id },
-    { emailVerified: true, verifyTokenHash: null, verifyTokenExpires: null }
-  );
-
-  res.json({ success: true, message: 'Your email has been verified.' });
-};
-
-// POST /api/auth/resend-verification  (requires auth)
-exports.resendVerification = async (req, res) => {
-  if (req.user.role === 'admin' || req.user.emailVerified) {
-    return res.json({ success: true, message: 'Your email is already verified.' });
-  }
-
-  const user = await User.findById(req.user._id);
-  await sendVerificationForUser(user).catch(() => {});
-
-  res.json({ success: true, message: 'Verification email sent — please check your inbox.' });
-};

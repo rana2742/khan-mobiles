@@ -32,9 +32,6 @@ exports.create = async (req, res) => {
   if (!Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ success: false, message: 'Your cart is empty.' });
   }
-  if (req.user && !req.user.emailVerified) {
-    return res.status(403).json({ success: false, message: 'Please verify your email address before placing an order.', code: 'EMAIL_NOT_VERIFIED' });
-  }
   if (!fullName?.trim() || !email?.trim() || !phone?.trim() || !address?.trim() || !city?.trim()) {
     return res.status(400).json({ success: false, message: 'All delivery details are required.' });
   }

@@ -1,7 +1,7 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
-const USER_SELECT_FIELDS = 'name email role avatarUrl phone googleId emailVerified';
+const USER_SELECT_FIELDS = 'name email role avatarUrl phone';
 
 // Verifies the JWT from the httpOnly cookie (or Authorization header as a
 // fallback) and attaches the authenticated user to req.user.

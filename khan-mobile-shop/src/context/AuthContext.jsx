@@ -35,11 +35,6 @@ export const AuthProvider = ({ children }) => {
     return data.user;
   }, []);
 
-  const loginWithGoogle = useCallback(async (credential) => {
-    const data = await api.post('/api/auth/google', { credential });
-    setUser(data.user);
-    return data.user;
-  }, []);
 
  const logout = useCallback(async () => {
     try {
@@ -49,9 +44,6 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
-  const resendVerification = useCallback(async () => {
-    return api.post('/api/auth/resend-verification');
-  }, []);
 
  const value = {
     user,
@@ -60,9 +52,7 @@ export const AuthProvider = ({ children }) => {
     isAdmin: user?.role === 'admin',
     login,
     signup,
-    loginWithGoogle,
     logout,
-    resendVerification,
     refreshUser,
   };
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
