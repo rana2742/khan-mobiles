@@ -113,9 +113,9 @@ exports.forgotPassword = async (req, res) => {
 
   const user = await User.findOne({ email: email.trim().toLowerCase() }).select('+password');
 
-  // No account, or a Google-only account with no password to reset — say
-  // nothing different, just don't actually send an email.
-  if (!user || !user.password) {
+  // Keep the response identical for unknown emails, while allowing legacy
+  // Google-only accounts to establish a password after Google sign-in is removed.
+  if (!user) {
     return genericResponse();
   }
 
